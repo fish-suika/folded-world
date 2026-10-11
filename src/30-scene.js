@@ -1,9 +1,9 @@
 // ===== 3D 描画（three.js r128）。判定は 20-logic.js の2Dマス目、ここは見た目だけ =====
 const GAME3D = (function () {
-  let renderer, scene, camera, sun, container;
+  let renderer, scene, camera, sun, container, levelRoot;
   let heroRoot, heroBody, heroTail;
-  let foldGroups = [], markers = [], flag, flagGlow;
-  let camX = 0, camY = 6, shakeT = 0;
+  let foldGroups = [], markers = [], backMeshes = [], shardMeshes = [], spikeMeshes = [], flagMeshes = [], flag, flagGlow;
+  let camX = 0, camY = 6;
   const D = 0.5;            // 紙の厚み（奥行き）
 
   // ---- 紙のテクスチャ（繊維とざらつきを canvas で生成） ----
@@ -34,11 +34,17 @@ const GAME3D = (function () {
     M.ground = mat(0x93d38c);   M.groundBack = mat(0x6fae7a, TEX.b);
     M.wall = mat(0x8ec5ee);     M.wallBack = mat(0x6a9fcf, TEX.b);
     M.tab = mat(0xffd76f);      M.tabBack = mat(0xff8a66, TEX.b);   // 耳は黄色、裏は珊瑚色
-    M.cap = mat(0x5fb86a);      M.capTab = mat(0xffb938);
+    M.cap = mat(0x5fb86a);      M.capTab = mat(0xffb938);  M.capBack = mat(0xe0563a);
+    M.spike = new THREE.MeshLambertMaterial({ color: 0x6b6f86 });
+    M.shard = new THREE.MeshLambertMaterial({ color: 0xffd23a, emissive: 0x7a5a00 });
+    M.ghost = new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.28, depthWrite: false });
+    M.ghostLine = new THREE.LineBasicMaterial({ color: 0xd9a400 });
   }
 
   const boxGeo = new THREE.BoxGeometry(1, 1, D);
   const capGeo = new THREE.BoxGeometry(1.0, 0.2, D + 0.04);
+  const spikeGeo = new THREE.ConeGeometry(0.2, 0.55, 4);
+  const shardGeo = new THREE.OctahedronGeometry(0.34);
 
   function cellMesh(front, back) {
     // 面の順: +x, -x, +y, -y, +z, -z
@@ -47,33 +53,58 @@ const GAME3D = (function () {
     return m;
   }
 
-  function buildLevel(world) {
+  function buildLevel(world, level) {
     const W = world.W, H = world.H;
     const inFold = (cx, cy) => world.folds.findIndex(fd => world.inSource(fd, cx, cy));
     foldGroups = world.folds.map(fd => {
       const g = new THREE.Group();
       g.position.set(fd.f, 0, 0);       // 折り目を軸に回る
-      scene.add(g);
+      levelRoot.add(g);
       return g;
     });
     for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
       if (!world.baseSolid(cx, cy)) continue;
       const fi = inFold(cx, cy);
       const isTab = fi >= 0;
-      const tall = cy >= 2 && !(cx < 16 && cy < 2);
-      const m = isTab ? cellMesh(M.tab, M.tabBack) : (tall ? cellMesh(M.wall, M.wallBack) : cellMesh(M.ground, M.groundBack));
+      const m = isTab ? cellMesh(M.tab, M.tabBack) : (cy >= 2 ? cellMesh(M.wall, M.wallBack) : cellMesh(M.ground, M.groundBack));
       if (isTab) m.scale.z = 0.92;
       const open = !world.baseSolid(cx, cy + 1);
       if (isTab) m.position.set(cx + 0.5 - world.folds[fi].f, cy + 0.5, 0);
       else m.position.set(cx + 0.5, cy + 0.5, 0);
-      (isTab ? foldGroups[fi] : scene).add(m);
+      (isTab ? foldGroups[fi] : levelRoot).add(m);
       if (open) {
         const cap = new THREE.Mesh(capGeo, isTab ? M.capTab : M.cap);
         cap.position.set(m.position.x, cy + 0.9, 0);
-        cap.castShadow = false; cap.receiveShadow = true;
-        (isTab ? foldGroups[fi] : scene).add(cap);
+        cap.receiveShadow = true;
+        (isTab ? foldGroups[fi] : levelRoot).add(cap);
       }
     }
+    // 耳の「ゴースト」（耳の範囲を薄い黄色で示す。裏面だけの耳もここで見える）と、裏面の足場
+    backMeshes = [];
+    world.folds.forEach((fd, i) => {
+      const g = foldGroups[i];
+      const cxm = (fd.x0 + fd.x1) / 2 - fd.f, cym = (fd.y0 + fd.y1) / 2;
+      const gw = fd.x1 - fd.x0, gh = fd.y1 - fd.y0;
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(gw, gh), M.ghost);
+      plane.position.set(cxm, cym, D / 2 + 0.03);
+      const line = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(gw, gh)), M.ghostLine);
+      line.position.set(cxm, cym, D / 2 + 0.04);
+      g.add(plane, line);
+      const list = [];
+      fd.back.forEach(k => {
+        const cx = k % W, cy = Math.floor(k / W);
+        const m = cellMesh(M.tabBack, M.tabBack);
+        m.scale.z = 0.92;
+        m.position.set(cx + 0.5 - fd.f, cy + 0.5, 0);
+        g.add(m); list.push(m);
+        if (!fd.back.has((cy + 1) * W + cx)) {
+          const cap = new THREE.Mesh(capGeo, M.capBack);
+          cap.position.set(m.position.x, cy + 0.9, 0);
+          g.add(cap); list.push(cap);
+        }
+      });
+      backMeshes.push(list);
+    });
     // 折り目の点線
     markers = world.folds.map(fd => {
       const g = new THREE.Group();
@@ -85,9 +116,57 @@ const GAME3D = (function () {
         g.add(d);
       }
       g.userData.mat = m;
-      scene.add(g);
+      levelRoot.add(g);
       return g;
     });
+    // トゲ
+    spikeMeshes = world.spikes.map(sp => {
+      const fi = sp.back >= 0 ? sp.back : inFold(sp.cx, sp.cy);
+      const g = new THREE.Group();
+      for (let k = 0; k < 2; k++) {
+        const c = new THREE.Mesh(spikeGeo, M.spike);
+        c.position.set(-0.25 + k * 0.5, 0.275, 0); c.castShadow = true; g.add(c);
+      }
+      if (fi >= 0) { g.position.set(sp.cx + 0.5 - world.folds[fi].f, sp.cy, 0); foldGroups[fi].add(g); }
+      else { g.position.set(sp.cx + 0.5, sp.cy, 0); levelRoot.add(g); }
+      return { g, sp, fi };
+    });
+    // 小さな欠片
+    shardMeshes = world.shards.map(s => {
+      const fi = s.back >= 0 ? s.back : inFold(s.cx, s.cy);
+      const m = new THREE.Mesh(shardGeo, M.shard);
+      m.scale.set(1, 1.3, 0.45); m.castShadow = true;
+      if (fi >= 0) { m.position.set(s.cx + 0.5 - world.folds[fi].f, s.cy + 0.5, 0); foldGroups[fi].add(m); }
+      else { m.position.set(s.cx + 0.5, s.cy + 0.5, 0); levelRoot.add(m); }
+      return { m, s, fi };
+    });
+    // チェックポイント旗
+    flagMeshes = world.flags.map(f => {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.5, 0.07), new THREE.MeshLambertMaterial({ color: 0xfaf3df }));
+      pole.position.y = 0.75;
+      const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(0.7, 0.22); s.lineTo(0, 0.44); s.closePath();
+      const cm = new THREE.MeshLambertMaterial({ color: 0xb8b2a5, side: THREE.DoubleSide });
+      const cloth = new THREE.Mesh(new THREE.ShapeGeometry(s), cm);
+      cloth.position.set(0.04, 1.0, 0);
+      g.add(pole, cloth);
+      g.position.set(f.x, f.y, -0.5);
+      levelRoot.add(g);
+      return { g, cm, cloth };
+    });
+    // ゴール旗
+    flag = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.6, 0.1), new THREE.MeshLambertMaterial({ color: 0xfaf3df }));
+    pole.position.y = 1.3;
+    const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(1.3, 0.4); s.lineTo(0, 0.8); s.closePath();
+    const cloth = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color: 0xff5d7a, side: THREE.DoubleSide }));
+    cloth.position.set(0.05, 1.85, 0);
+    flagGlow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.35 }));
+    flagGlow.position.set(0.5, 1.8, -0.2);
+    flag.add(pole, cloth, flagGlow);
+    flag.position.set(level.goal.x, level.goal.y, 0);
+    flag.userData.cloth = cloth;
+    levelRoot.add(flag);
   }
 
   // ---- 背景：紙の切り絵を何層も重ねる ----
@@ -97,7 +176,7 @@ const GAME3D = (function () {
     for (let x = x0; x <= x1; x += 1.5) s.lineTo(x, baseY + Math.sin(x * freq + phase) * amp + Math.sin(x * freq * 2.3 + phase * 1.7) * amp * 0.4);
     s.lineTo(x1, -30); s.closePath();
     const m = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color, map: TEX.b }));
-    m.position.z = z; m.receiveShadow = false;
+    m.position.z = z;
     scene.add(m);
   }
   function cloud(x, y, z, sc) {
@@ -121,12 +200,12 @@ const GAME3D = (function () {
     g.position.set(x, 2, z); g.scale.setScalar(sc); scene.add(g);
   }
   function buildBackdrop() {
-    hill(0xcfe9d4, -26, 4.5, 3.2, 0.11, 0.5, -40, 110);
-    hill(0xb5dcb8, -18, 3.2, 2.6, 0.16, 2.0, -40, 110);
-    hill(0x9ccf9e, -11, 2.4, 1.8, 0.22, 4.2, -40, 110);
-    [[6, 11, -22, 1.4], [26, 12.5, -24, 1.7], [48, 10.5, -20, 1.3], [66, 12, -25, 1.8], [-8, 12, -23, 1.5]].forEach(a => cloud(...a));
-    [[3, -2.5, 1.2, 0x5aa96a], [11, -3.5, 1.5, 0x7bc27f], [19, -2.8, 1.1, 0x5aa96a], [29, -3, 1.4, 0x7bc27f],
-     [37, -2.5, 1.2, 0x5aa96a], [47, -3.3, 1.6, 0x7bc27f], [55, -2.6, 1.2, 0x5aa96a]].forEach(a => tree(...a));
+    hill(0xcfe9d4, -26, 4.5, 3.2, 0.11, 0.5, -40, 130);
+    hill(0xb5dcb8, -18, 3.2, 2.6, 0.16, 2.0, -40, 130);
+    hill(0x9ccf9e, -11, 2.4, 1.8, 0.22, 4.2, -40, 130);
+    [[6, 11, -22, 1.4], [26, 12.5, -24, 1.7], [48, 10.5, -20, 1.3], [66, 12, -25, 1.8], [-8, 12, -23, 1.5], [86, 11, -22, 1.5]].forEach(a => cloud(...a));
+    const cols = [0x5aa96a, 0x7bc27f];
+    for (let i = 0; i < 26; i++) tree(2 + i * 3.1 + (i % 3) * 0.7, -2.4 - (i % 4) * 0.4, 1.0 + (i % 5) * 0.12, cols[i % 2]);
   }
 
   // ---- 主人公：折り紙のキツネ「カミ」 ----
@@ -157,23 +236,7 @@ const GAME3D = (function () {
     scene.add(heroRoot);
   }
 
-  // ---- ゴール旗 ----
-  function buildGoal(level) {
-    flag = new THREE.Group();
-    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.6, 0.1), new THREE.MeshLambertMaterial({ color: 0xfaf3df }));
-    pole.position.y = 1.3;
-    const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(1.3, 0.4); s.lineTo(0, 0.8); s.closePath();
-    const cloth = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color: 0xff5d7a, side: THREE.DoubleSide }));
-    cloth.position.set(0.05, 1.85, 0);
-    flagGlow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.35 }));
-    flagGlow.position.set(0.5, 1.8, -0.2);
-    flag.add(pole, cloth, flagGlow);
-    flag.position.set(level.goal.x, level.goal.y, 0);
-    flag.userData.cloth = cloth;
-    scene.add(flag);
-  }
-
-  function init(el, world, level) {
+  function init(el) {
     container = el;
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -192,12 +255,18 @@ const GAME3D = (function () {
     scene.add(sun); scene.add(sun.target);
     makeMaterials();
     buildBackdrop();
-    buildLevel(world);
     buildHero();
-    buildGoal(level);
-    camX = level.start.x; camY = CFG.cam.minY;
+    levelRoot = new THREE.Group();
+    scene.add(levelRoot);
     resize();
     window.addEventListener('resize', resize);
+  }
+
+  // ステージを読み込む（前のステージの見た目を捨てる）
+  function load(world, level) {
+    while (levelRoot.children.length) levelRoot.remove(levelRoot.children[0]);
+    buildLevel(world, level);
+    camX = level.start.x; camY = CFG.cam.minY;
   }
 
   function resize() {
@@ -209,14 +278,16 @@ const GAME3D = (function () {
 
   const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
 
-  // st: { hero, world, anim, shake:{i,t}|null, candidate, time }
+  // st: { hero, world, anim, shake:{i,t}|null, candidate, time, squash, got:[bool], flagsHit:[bool] }
   function update(dt, st) {
     const { hero, world, anim, shake } = st;
     // 折りの角度
+    const prog = [];
     for (let i = 0; i < foldGroups.length; i++) {
       const fd = world.folds[i];
       let p = world.active === i ? 1 : 0;
       if (anim && anim.i === i) { const e = ease(anim.t / CFG.fold.dur); p = anim.fold ? e : 1 - e; }
+      prog[i] = p;
       let rot = -fd.dir * Math.PI * p;
       if (shake && shake.i === i) rot += Math.sin(shake.t * 70) * 0.07 * (1 - shake.t / CFG.fold.shakeDur) * -fd.dir;
       foldGroups[i].rotation.y = rot;
@@ -224,8 +295,25 @@ const GAME3D = (function () {
       const mk = markers[i].userData.mat;
       const hot = st.candidate === i || world.active === i;
       mk.color.setHex(hot ? (Math.sin(st.time * 8) > 0 ? 0xffa800 : 0xff6a00) : 0x8a7a66);
-      markers[i].visible = true;
+      // 裏面の足場は、半分以上めくれてから現れる（紙の裏側が見えるのと同じ）
+      const showBack = p > 0.5;
+      for (const m of backMeshes[i]) m.visible = showBack;
     }
+    // アイテム
+    for (const e of shardMeshes) {
+      const idx = world.shards.indexOf(e.s);
+      let vis = !st.got[idx];
+      if (e.s.back >= 0) vis = vis && prog[e.s.back] > 0.5;
+      e.m.visible = vis;
+      e.m.rotation.y = st.time * 2.2;
+      e.m.scale.y = 1.3 + Math.sin(st.time * 4 + idx) * 0.08;
+    }
+    for (const e of spikeMeshes) e.g.visible = world.spikeCell(e.sp) !== null || (anim && e.fi >= 0);
+    flagMeshes.forEach((e, i) => {
+      const hit = st.flagsHit[i];
+      e.cm.color.setHex(hit ? 0xffb938 : 0xb8b2a5);
+      e.cloth.rotation.y = Math.sin(st.time * 3 + i) * 0.25;
+    });
     // 主人公
     let hx = hero.x, hy = hero.y, hz = 0;
     if (anim && anim.carried) {
@@ -237,6 +325,7 @@ const GAME3D = (function () {
     }
     heroRoot.position.set(hx, hy, hz);
     heroRoot.scale.x = hero.face >= 0 ? 1 : -1;
+    heroRoot.visible = !st.dead;
     // つぶれ・のび・走りのはずみ
     const speed = Math.abs(hero.vx);
     let sx = 1, sy = 1;
@@ -249,6 +338,7 @@ const GAME3D = (function () {
     flag.userData.cloth.rotation.y = Math.sin(st.time * 3) * 0.25;
     flagGlow.scale.setScalar(1 + Math.sin(st.time * 3) * 0.08);
     // カメラ
+    const half = world.W / 2;
     const tx = Math.min(world.W - 11, Math.max(11, hx + hero.face * 2.2));
     const ty = Math.max(CFG.cam.minY, hy + 2.6);
     const k = 1 - Math.exp(-CFG.cam.smooth * dt);
@@ -258,7 +348,7 @@ const GAME3D = (function () {
     sun.position.set(camX - 8, 18, 16); sun.target.position.set(camX, 3, 0); sun.target.updateMatrixWorld();
   }
 
-  function snapCamera(x, y) { camX = x; camY = Math.max(CFG.cam.minY, y + 2.6); }
+  function snapCamera(x, y) { camX = Math.min(Math.max(x, 11), 1000); camY = Math.max(CFG.cam.minY, y + 2.6); }
   function render() { renderer.render(scene, camera); }
-  return { init, update, render, resize, snapCamera };
+  return { init, load, update, render, resize, snapCamera };
 })();

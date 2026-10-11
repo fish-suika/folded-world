@@ -55,9 +55,11 @@ function tryLandscape() {
 
 const HUD = {
   show(name) {
-    ['scTitle', 'scPause', 'scClear'].forEach(id => $(id).classList.toggle('on', id === name));
+    ['scTitle', 'scSelect', 'scPause', 'scClear'].forEach(id => $(id).classList.toggle('on', id === name));
   },
   playing(on) { document.body.classList.toggle('playing', on); },
+  stage(txt) { $('tagStage').textContent = txt; },
+  shards(n, t) { $('tagShard').textContent = '◆ ' + n + '/' + t; },
   time(t) { $('tagTime').textContent = t.toFixed(1) + ' s'; },
   prompt(text, warn) {
     const p = $('prompt');

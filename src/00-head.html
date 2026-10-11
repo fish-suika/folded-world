@@ -27,6 +27,15 @@
     background:rgba(251,244,226,.88);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
   #tagStage{left:2.2cqw}
   #tagTime{right:2.2cqw;font-variant-numeric:tabular-nums}
+  #tagShard{right:15cqw;color:#9a6b00}
+  .cards{display:flex;gap:2.2cqw;margin-top:.5cqw}
+  .card{width:23cqw;padding:1.6cqw 1.2cqw;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
+  .card:active{transform:translateY(.4cqw);box-shadow:0 .2cqw 0 #cfc3a8}
+  .card b{display:block;font-size:2.8cqw;letter-spacing:.1em}
+  .card .nm{display:block;font-size:2.3cqw;font-weight:700}
+  .card .ht{display:block;font-size:1.5cqw;opacity:.7;min-height:3.2cqw}
+  .card .st{display:block;font-size:1.8cqw;color:#9a6b00;letter-spacing:.1em}
+  .card.done{background:#fff7da}
   #prompt{position:absolute;left:50%;top:13cqh;transform:translateX(-50%);font-size:2.4cqw;font-weight:800;letter-spacing:.1em;
     padding:.8cqw 2.4cqw;border-radius:3cqw;background:var(--gold);color:#4a2d00;box-shadow:0 .4cqw 0 #c47f00;display:none;white-space:nowrap}
   #prompt.warn{background:#ffe1d8;color:#8a2b12;box-shadow:0 .4cqw 0 #d98c78}
@@ -77,6 +86,7 @@
   <div id="view"></div>
   <div id="hud">
     <div class="tag" id="tagStage">おためしの紙</div>
+    <div class="tag" id="tagShard">◆ 0/3</div>
     <div class="tag" id="tagTime">0.0 s</div>
     <div id="prompt"></div>
     <div id="toast"></div>
@@ -92,14 +102,19 @@
     <div class="row"><button class="btn" id="btnStart">はじめる</button></div>
     <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
   </div>
+  <div class="screen" id="scSelect">
+    <h2>ワールド1　草原の紙</h2>
+    <div class="cards" id="cards"></div>
+    <small>小さな欠片は ◆ で数える（集めなくてもクリアできる）</small>
+  </div>
   <div class="screen" id="scPause">
     <h2>ポーズ</h2>
-    <div class="row"><button class="btn" id="btnResume">つづける</button><button class="btn sub" id="btnRetry">やり直す</button></div>
+    <div class="row"><button class="btn" id="btnResume">つづける</button><button class="btn sub" id="btnRetry">やり直す</button><button class="btn sub" id="btnToSelect1">ステージ選択</button></div>
   </div>
   <div class="screen" id="scClear">
     <h2>クリア！</h2>
     <p id="clearInfo"></p>
-    <div class="row"><button class="btn" id="btnAgain">もういちど</button></div>
+    <div class="row"><button class="btn" id="btnNext">つぎへ</button><button class="btn sub" id="btnAgain">もういちど</button><button class="btn sub" id="btnToSelect2">ステージ選択</button></div>
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
