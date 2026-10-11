@@ -14,6 +14,11 @@
     touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
   html,body{height:100vh;height:100dvh}
   button{font-family:var(--jp);touch-action:manipulation;cursor:pointer}
+  /* 改行は文節の切れ目で（言葉の途中で切れない）。短いラベルは折り返さない */
+  body{word-break:auto-phrase;overflow-wrap:anywhere;line-break:strict}
+  p,h1,h2,small,.help{text-wrap:balance}
+  .ph{display:inline-block}
+  .tag,.btn,.tb,.wlab,.card b,.card .nm,.card .st,#prompt,#toast,#bMute{white-space:nowrap}
 
   /* ---- 16:9 の枠。画面に収まる最大の 16:9 を中央に置く ---- */
   #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);aspect-ratio:16/9;
@@ -31,14 +36,16 @@
   #tagStage{left:2.2cqw}
   #tagTime{right:2.2cqw;font-variant-numeric:tabular-nums}
   #tagShard{right:15cqw;color:#9a6b00}
-  .cards{display:flex;flex-direction:column;gap:1.1cqw;margin-top:.2cqw}
+  .cards{display:flex;flex-direction:column;gap:.6cqw}
+  #scSelect{gap:.8cqw;padding:1cqw 2cqw}
+  #scSelect h2{font-size:3.4cqw;line-height:1.2}
   .wrow{display:flex;gap:1.4cqw;align-items:stretch;justify-content:center}
-  .wlab{width:13cqw;display:flex;align-items:center;justify-content:center;font-size:1.7cqw;font-weight:700;letter-spacing:.06em;line-height:1.5}
-  .card{width:20cqw;padding:.7cqw .8cqw;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
+  .wlab{width:15cqw;display:flex;align-items:center;justify-content:center;font-size:1.7cqw;font-weight:700;letter-spacing:.06em;line-height:1.5}
+  .card{width:21cqw;padding:.35cqw .8cqw;line-height:1.45;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
   .card:active{transform:translateY(.4cqw);box-shadow:0 .2cqw 0 #cfc3a8}
   .card b{display:inline;font-size:1.9cqw;letter-spacing:.08em;margin-right:.6cqw}
   .card .nm{display:inline;font-size:1.8cqw;font-weight:700}
-  .card .ht{display:block;font-size:1.25cqw;opacity:.7}
+  .card .ht{display:block;font-size:1.15cqw;opacity:.7}
   .card .st{display:block;font-size:1.5cqw;color:#9a6b00;letter-spacing:.1em}
   #bMute{position:absolute;top:2.2cqw;left:50%;transform:translateX(-50%);pointer-events:auto;border:0;border-radius:2cqw;padding:.5cqw 1.4cqw;font-size:1.8cqw;font-weight:700;background:rgba(251,244,226,.88);color:var(--ink);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
   #tagStage{max-width:34cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -54,12 +61,12 @@
   #toast.on{opacity:1}
 
   /* ---- 画面（タイトル・ポーズ・クリア） ---- */
-  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2.2cqw;
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:safe center;overflow:auto;padding:2cqw 3cqw;text-align:center;gap:2.2cqw;
     background:rgba(255,246,224,.9);z-index:5}
   .screen.on{display:flex}
   .screen h1{font-size:6.4cqw;letter-spacing:.12em;color:var(--ink);text-shadow:.35cqw .35cqw 0 #ffd36b}
-  .screen h2{font-size:5cqw;letter-spacing:.14em;text-shadow:.3cqw .3cqw 0 #ffd36b}
-  .screen p{font-size:2.1cqw;line-height:1.9;letter-spacing:.06em}
+  .screen h2{font-size:4cqw;letter-spacing:.14em;text-shadow:.3cqw .3cqw 0 #ffd36b}
+  .screen p{font-size:2.6cqw;line-height:1.9;letter-spacing:.06em}
   .screen small{font-size:1.7cqw;opacity:.75;letter-spacing:.05em;line-height:1.8}
   .btn{font-size:2.6cqw;font-weight:800;letter-spacing:.2em;padding:1cqw 5cqw;border:0;border-radius:4cqw;background:var(--coral);color:#fff;
     box-shadow:0 .6cqw 0 #c4482e;transition:transform .08s}
@@ -111,14 +118,12 @@
 
   <div class="screen on" id="scTitle">
     <h1>折りたたまれた世界</h1>
-    <p>紙の世界を折って、道を作ろう。<br>折り目（点線）の近くで「折る」と、紙がパタンと反対側にかさなる。</p>
+    <p>紙を折って、道を作ろう。</p>
     <div class="row"><button class="btn" id="btnStart">はじめる</button><button class="btn sub" id="btnHelp1">あそびかた</button></div>
-    <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>U</kbd> / <kbd>Shift</kbd> 戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
   </div>
   <div class="screen" id="scSelect">
-    <h2>ワールド1　草原の紙</h2>
+    <h2>ステージをえらぶ</h2>
     <div class="cards" id="cards"></div>
-    <small>小さな欠片は ◆ で数える（集めなくてもクリアできる）</small>
   </div>
   <div class="screen" id="scEnding">
     <h1>おしまい</h1>
@@ -131,9 +136,9 @@
     <div class="help">
       <b>目的</b>：旗（ゴール）まで進む。落ちる・トゲに触れると、最後の旗（チェックポイント）から再開。<br>
       <b>折る</b>：点線の近くで <kbd>F</kbd>。黄色い「耳」の紙が、折り目を軸に反対側へパタンと重なる。<br>
-      <b>戻す</b>：もう一度 <kbd>F</kbd>（二重折りの面では <kbd>U</kbd> / <kbd>Shift</kbd>）。耳の上に乗って戻すと、耳ごと元の位置へ運ばれる。<br>
+      <b>戻す</b>：もう一度 <kbd>F</kbd>。次の折り目を折ると、前の折りは自動で戻る。二重折りの面では 2 か所まで同時に折れて、<kbd>U</kbd> / <kbd>Shift</kbd> で戻す。<br>
       <b>裏面</b>：折ると、紙の裏にだけある足場や欠片が現れる。<br>
-      <b>折れないとき</b>：紙が重なる位置や、乗っている耳は折れない。耳が震えて知らせる。<br>
+      <b>重なったとき</b>：折る場所に自分がいても大丈夫。紙の上に乗せてくれる。耳の上に乗って折ると、耳ごと運ばれる。<br>
       <b>小さな欠片</b>：各ステージ 3 個。集めなくてもクリアできる。20 個で「ひみつの紙」が開く。<br>
       <b>困ったら</b>：ポーズ（<kbd>Esc</kbd>）の「ヒント」で、次に使う折り目が光る。
     </div>

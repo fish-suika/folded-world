@@ -241,8 +241,8 @@ const GAME3D = (function () {
               hills: [0xf8cdb0, 0xf0ab94, 0xdc8b7c], trees: [0xc4654f, 0xe28a6a], hemi: [0xfff1e0, 0xd9a98c, 0.82], sun: 0xffd9a8 },
     night:  { sky: 'linear-gradient(#141a48 0%,#2f3a7a 55%,#5a5aa8 100%)', ground: 0x5b6dbc, groundBack: 0x434f94, cap: 0x8b9af0, wall: 0x7a64b8, wallBack: 0x5a4a96,
               hills: [0x4a549a, 0x38417f, 0x2c3468], trees: [0x3f4ea6, 0x4a9fb4], hemi: [0xc2c9ff, 0x4a5090, 0.8], sun: 0xc6ccff, stars: true },
-    gold:   { sky: 'linear-gradient(#ffe27a 0%,#fff0b8 55%,#ffffff 100%)', ground: 0xf6d568, groundBack: 0xd9b33f, cap: 0xe8a820, wall: 0xffb86b, wallBack: 0xd9904a,
-              hills: [0xfff0c0, 0xffe39a, 0xffd37a], trees: [0xe0a33a, 0xf2c25a], hemi: [0xffffff, 0xffe6a0, 0.85], sun: 0xfff4d0 },
+    secret: { sky: 'linear-gradient(#cdb8f0 0%,#e8dcfa 55%,#fbefff 100%)', ground: 0xb9a0e6, groundBack: 0x9a7fcc, cap: 0x8a66d8, wall: 0x86c9d6, wallBack: 0x62a6b6,
+              hills: [0xe9defa, 0xd9c8f4, 0xc6afea], trees: [0x9a7be0, 0x7fb8d8], hemi: [0xffffff, 0xcfc0ee, 0.8], sun: 0xfff2ff },
   };
   function applyTheme(name) {
     const t = THEMES[name] || THEMES.meadow;
@@ -277,24 +277,42 @@ const GAME3D = (function () {
     heroRoot.add(heroBody);
     const orange = new THREE.MeshLambertMaterial({ color: 0xff8f3a, map: TEX.a });
     const white = new THREE.MeshLambertMaterial({ color: 0xfffaf0, map: TEX.a });
+    const pink = new THREE.MeshLambertMaterial({ color: 0xffb6a0 });
     const dark = new THREE.MeshLambertMaterial({ color: 0x3a2a20 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.34), orange); body.position.set(0, 0.55, 0);
-    const belly = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.4, 0.04), white); belly.position.set(0.1, 0.5, 0.19);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.46, 0.4), orange); head.position.set(0.12, 1.12, 0);
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.34, 4), white); snout.rotation.z = -Math.PI / 2; snout.position.set(0.56, 1.05, 0);
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), dark); nose.position.set(0.72, 1.05, 0);
-    const earG = new THREE.ConeGeometry(0.16, 0.42, 4);
-    const ear1 = new THREE.Mesh(earG, orange); ear1.position.set(0.0, 1.5, 0.12);
-    const ear2 = new THREE.Mesh(earG, orange); ear2.position.set(0.24, 1.5, -0.12);
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.05), dark); eye.position.set(0.36, 1.18, 0.21);
-    const eye2 = eye.clone(); eye2.position.z = -0.21;
-    heroTail = new THREE.Group(); heroTail.position.set(-0.3, 0.45, 0);
-    const tailM = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.85, 4), orange); tailM.rotation.z = Math.PI / 2 + 0.5; tailM.position.set(-0.4, 0.1, 0);
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), white); tip.rotation.z = Math.PI / 2 + 0.5; tip.position.set(-0.78, 0.3, 0);
-    heroTail.add(tailM, tip);
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.3), orange); legs.position.set(0, 0.12, 0);
-    [body, belly, head, snout, nose, ear1, ear2, eye, eye2, tailM, tip, legs].forEach(m => { m.castShadow = true; });
-    heroBody.add(body, belly, head, snout, nose, ear1, ear2, eye, eye2, heroTail, legs);
+    const ball = (r, mat, sx, sy, sz, x, y, z) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), mat);
+      m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.castShadow = true; return m;
+    };
+    const body = ball(0.42, orange, 1.0, 0.92, 0.86, 0, 0.5, 0);               // ころんとした体
+    const belly = ball(0.3, white, 0.8, 0.85, 0.5, 0.14, 0.44, 0.2);
+    const head = ball(0.42, orange, 1.12, 0.96, 1.02, 0.12, 1.08, 0);          // 大きな丸い頭
+    const cheekL = ball(0.17, white, 1, 0.9, 0.8, 0.36, 0.98, 0.24);
+    const cheekR = ball(0.17, white, 1, 0.9, 0.8, 0.36, 0.98, -0.24);
+    const snout = ball(0.15, white, 1.2, 0.85, 0.95, 0.52, 1.03, 0);
+    const nose = ball(0.065, dark, 1, 0.8, 1, 0.66, 1.07, 0);
+    const eyeL = ball(0.075, dark, 0.7, 1.15, 0.7, 0.4, 1.2, 0.26);
+    const eyeR = ball(0.075, dark, 0.7, 1.15, 0.7, 0.4, 1.2, -0.26);
+    const glintL = ball(0.028, white, 1, 1, 1, 0.44, 1.25, 0.3);
+    const glintR = ball(0.028, white, 1, 1, 1, 0.44, 1.25, -0.3);
+    const blushL = ball(0.06, pink, 1, 0.7, 0.4, 0.34, 1.05, 0.34);
+    const blushR = ball(0.06, pink, 1, 0.7, 0.4, 0.34, 1.05, -0.34);
+    const earG = new THREE.ConeGeometry(0.17, 0.42, 20);
+    const earIn = new THREE.ConeGeometry(0.09, 0.26, 16);
+    const mkEar = z => {
+      const g = new THREE.Group();
+      const o = new THREE.Mesh(earG, orange), i = new THREE.Mesh(earIn, pink);
+      o.castShadow = true; i.position.set(0.02, -0.04, 0.07 * Math.sign(z)); g.add(o, i);
+      g.position.set(0.08, 1.52, z); g.rotation.z = -0.15; g.rotation.x = 0.18 * -Math.sign(z);
+      return g;
+    };
+    const earL = mkEar(0.2), earR = mkEar(-0.2);
+    heroTail = new THREE.Group(); heroTail.position.set(-0.34, 0.5, 0);        // ふわふわのしっぽ
+    const tailBall = ball(0.3, orange, 1.35, 1, 1, -0.38, 0.12, 0);
+    const tailTip = ball(0.17, white, 1, 1, 1, -0.74, 0.2, 0);
+    heroTail.add(tailBall, tailTip); heroTail.rotation.z = 0.2;
+    const footL = ball(0.14, orange, 1.2, 0.8, 1, 0.22, 0.1, 0.17);
+    const footR = ball(0.14, orange, 1.2, 0.8, 1, -0.05, 0.1, -0.17);
+    heroBody.add(body, belly, head, cheekL, cheekR, snout, nose, eyeL, eyeR, glintL, glintR, blushL, blushR, earL, earR, heroTail, footL, footR);
     scene.add(heroRoot);
   }
 
@@ -353,13 +371,15 @@ const GAME3D = (function () {
 
   // st: { hero, world, anim, shake:{i,t}|null, candidate, time, squash, got:[bool], flagsHit:[bool] }
   function update(dt, st) {
-    const { hero, world, anim, shake } = st;
+    const { hero, world, shake } = st;
+    const anims = st.anims || [];
     // 折りの角度
     const prog = [];
     for (let i = 0; i < foldGroups.length; i++) {
       const fd = world.folds[i];
       let p = world.isOn(i) ? 1 : 0;
-      if (anim && anim.i === i) { const e = ease(anim.t / CFG.fold.dur); p = anim.fold ? e : 1 - e; }
+      const an = anims.find(a => a.i === i);
+      if (an) { const e = ease(an.t / CFG.fold.dur); p = an.fold ? e : 1 - e; }
       prog[i] = p;
       const sgn = fd.axis === 'x' ? -fd.dir : fd.dir;
       let rot = sgn * Math.PI * p;
@@ -383,7 +403,7 @@ const GAME3D = (function () {
       e.m.rotation.y = st.time * 2.2;
       e.m.scale.y = 1.3 + Math.sin(st.time * 4 + idx) * 0.08;
     }
-    for (const e of spikeMeshes) e.g.visible = world.spikeCell(e.sp) !== null || (anim && e.fi >= 0);
+    for (const e of spikeMeshes) e.g.visible = world.spikeCell(e.sp) !== null || (anims.length > 0 && e.fi >= 0);
     flagMeshes.forEach((e, i) => {
       const hit = st.flagsHit[i];
       e.cm.color.setHex(hit ? 0xffb938 : 0xb8b2a5);
@@ -391,12 +411,16 @@ const GAME3D = (function () {
     });
     // 主人公
     let hx = hero.x, hy = hero.y, hz = 0;
-    if (anim && anim.carried) {
-      const fd = world.folds[anim.i];
-      const e = ease(anim.t / CFG.fold.dur), p = anim.fold ? e : 1 - e;   // 折れた角度（1 = 完全に折れている）
-      const d1 = anim.x1 - fd.f;                                          // 元の位置の折り目からの距離
-      hx = fd.f + d1 * Math.cos(Math.PI * p);
-      hz = Math.abs(d1) * Math.sin(Math.PI * p);
+    const ha = anims.find(a => a.carried || a.x1 !== a.x0 || a.y1 !== a.y0);
+    if (ha) {
+      const e = ease(ha.t / CFG.fold.dur);
+      hy = ha.y0 + (ha.y1 - ha.y0) * e;
+      if (ha.carried) {   // 耳ごと弧を描いて運ばれる
+        const fd = world.folds[ha.i], p = ha.fold ? e : 1 - e;
+        const d = ha.fold ? ha.x0 - fd.f : ha.x1 - fd.f;   // 元の位置の折り目からの距離
+        hx = fd.f + d * Math.cos(Math.PI * p);
+        hz = Math.abs(d) * Math.sin(Math.PI * p);
+      } else hx = ha.x0 + (ha.x1 - ha.x0) * e;
     }
     heroRoot.position.set(hx, hy, hz);
     heroRoot.scale.x = hero.face >= 0 ? 1 : -1;

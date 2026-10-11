@@ -9,6 +9,8 @@ function T(name, ok, why) {
   ok ? pass++ : fail++;
 }
 const flat = rects => ({ id: 't', w: 40, h: 14, start: { x: 2.5, y: 2 }, goal: { x: 0, y: 0 }, folds: [], rects });
+// 部品で小さなステージを作る
+function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {}); fn(L); L.w = L.cur; L.goal = { x: L.cur - 2.5, y: 2 }; return L; }
 
 // --- 物理 ---
 (function () {
@@ -19,17 +21,11 @@ const flat = rects => ({ id: 't', w: 40, h: 14, start: { x: 2.5, y: 2 }, goal: {
   h = newHero(flat([]), { x: 5, y: 2 }); let maxY = 0;
   sim((i, hh) => { maxY = Math.max(maxY, hh.y); return { jumpPressed: i === 0, jumpHeld: true }; }, 240, h);
   T('フルジャンプの高さ 2.4〜2.9 マス', maxY - 2 > 2.4 && maxY - 2 < 2.9, (maxY - 2).toFixed(2));
-  const hj = newHero(flat([]), { x: 5, y: 2 }); let landX = 0;
-  for (let i = 0; i < 400; i++) {
-    stepHero(w, hj, { right: true, jumpPressed: i === 120, jumpHeld: true }, 1 / 120);
-    if (i > 125 && hj.ground) { landX = hj.x; break; }
-  }
-  // 走り出しの位置から、ジャンプして着地するまでの水平距離
   const hk = newHero(flat([]), { x: 5, y: 2 });
   for (let i = 0; i < 200; i++) stepHero(w, hk, { right: true }, 1 / 120);
   const jx = hk.x; let lx = 0;
   for (let i = 0; i < 300; i++) { stepHero(w, hk, { right: true, jumpPressed: i === 0, jumpHeld: true }, 1 / 120); if (i > 5 && hk.ground) { lx = hk.x; break; } }
-  T('走りジャンプの距離 4.3 マス以上', lx - jx > 4.3, (lx - jx).toFixed(2));
+  T('走りジャンプの距離 4.3 マス以上、5 マス未満（検証の「届く」と食い違わない）', lx - jx > 4.3 && lx - jx < 5.0, (lx - jx).toFixed(2));
   const w3 = new World(flat([[0, 0, 40, 2], [10, 2, 2, 3]]));
   h = newHero(flat([]), { x: 5, y: 2 });
   for (let i = 0; i < 1200; i++) stepHero(w3, h, { right: true, jumpPressed: h.ground && h.x > 8.2, jumpHeld: true }, 1 / 120);
@@ -40,63 +36,102 @@ const flat = rects => ({ id: 't', w: 40, h: 14, start: { x: 2.5, y: 2 }, goal: {
   T('2 マスの段には跳び乗れる', landedOn);
 })();
 
-// --- 折りのルール（1-1） ---
+// --- 折りのルール ---
 (function () {
-  const w = new World(LEVELS[0]);
-  w.mask = 1 << 1;
-  let ok = true; for (let cx = 18; cx <= 23; cx++) if (!w.solid(cx, 1)) ok = false;
-  T('1-1 T1 を折ると板が穴（18〜23）に架かる', ok);
-  T('1-1 T1 を折ると元の位置（24〜29 の行1）は空になり行0 は残る', !w.solid(24, 1) && !w.solid(29, 1) && w.solid(24, 0));
-  w.mask = 1 << 2;
-  T('1-1 T2 を折ると崖の足元が手前（39〜40, 行2〜3）に来る', w.solid(39, 2) && w.solid(40, 3) && !w.solid(41, 2) && w.solid(41, 4));
-  w.mask = 1 << 0;
-  T('1-1 T0 を折ると段（6〜7, 行2）ができる', w.solid(6, 2) && w.solid(7, 2) && !w.solid(8, 2) && w.solid(8, 3));
+  // 板：x=7 から穴 8 マス（7..14）、向こう岸 15..24
+  let L = mk(l => { LB.run(l, 7); LB.plank(l, 8, 10); LB.run(l, 4); });
+  let w = new World(L);
+  w.mask = 1;
+  let ok = true; for (let cx = 7; cx <= 14; cx++) if (!w.solid(cx, 1)) ok = false;
+  T('板を折ると穴（7〜14）にかかり、元の位置（15〜22 の行1）は空になる', ok && !w.solid(15, 1) && !w.solid(22, 1) && w.solid(15, 0));
   w.mask = 0;
-  T('折れない: 段の位置に立っている', !canFold(w, 2, 39.6, 2).ok && canFold(w, 2, 39.6, 2).why === 'overlap');
-  T('折れる: 離れた位置から', canFold(w, 2, 36.5, 2).ok);
-  T('折れない: 耳の反対側にいない', !canFold(w, 2, 43, 6).ok);
-  T('折れない: 遠すぎる／近づくと折れる', !canFold(w, 1, 2.5, 2).ok && canFold(w, 1, 15.3, 2).ok);
-  w.mask = 1 << 1;
-  const u = canUnfold(w, 1, 20.5, 2);
-  T('板の上で戻すと向こう岸（x=27.5）へ運ばれる', u.ok && u.carried && Math.abs(u.nx - 27.5) < 1e-6, JSON.stringify(u));
-  const u2 = canUnfold(w, 1, 12, 2);
-  T('手前の地面で戻しても動かない', u2.ok && !u2.carried);
-  w.mask = 1 << 0;
-  T('段の上からは壁が邪魔で戻せない', !canUnfold(w, 0, 6.5, 3).ok);
-})();
+  T('近づくと折れる／遠いと折れない', canFold(w, 0, 6.5, 2).ok && !canFold(w, 0, 0.5, 2).ok);
+  T('耳の反対側（向こう岸）からは折れない', !canFold(w, 0, 17, 2).ok);
+  // 板の上で戻すと、板ごと向こう岸へ運ばれる
+  w.mask = 1;
+  const u = canUnfold(w, 0, 10.5, 2);
+  T('板の上で戻すと向こう岸へ運ばれる', u.ok && u.carried && Math.abs(u.nx - 19.5) < 1e-6, JSON.stringify(u));
+  const u2 = canUnfold(w, 0, 5, 2);
+  T('手前の地面で戻しても動かない', u2.ok && !u2.carried && u2.nx === 5);
+  w.mask = 0;
 
-// --- 裏面・トゲ・アイテム（1-2） ---
-(function () {
-  const w = new World(LEVELS[1]);
-  T('裏面の足場は折る前は存在しない', !w.solid(15, 2) && !w.solid(25, 2) && !w.srcSolid(w.folds[0], 25, 2) === false);
-  w.mask = 1 << 0;
-  let ok = true; for (let cx = 15; cx <= 22; cx++) if (!w.solid(cx, 2)) ok = false;
-  T('Ta を折ると裏面の橋が穴（15〜22, 行2）に現れる', ok);
-  T('裏面にだけある欠片は折ったときだけ現れる', w.itemCell(w.shards[0], 1)[0] === 19 && w.itemCell(w.shards[0], 0) === null);
-  // 裏面の橋の上で戻すと、元の位置に足場がない
-  const u = canUnfold(w, 0, 18.5, 3);
-  T('裏面の橋の上で戻そうとすると「足場がない」で戻せない', !u.ok && u.why === 'void', JSON.stringify(u));
-  const u2 = canUnfold(w, 0, 30, 2);
-  T('向こう岸（残る紙）に立っていれば戻せる', u2.ok && !u2.carried);
-  w.mask = 0;
+  // 壁の段：折り先に体が重なるときは、持ち上げて紙の上に乗せる
+  L = mk(l => { LB.run(l, 8); LB.wallStep(l); LB.run(l, 4); });
+  w = new World(L);
+  const f = canFold(w, 0, 6.5, 2);   // 段が降りる位置（6〜7, 行2）に立っている
+  T('折り先に立っていても折れる（紙の上に持ち上げられる）', f.ok && f.y === 3 && f.x === 6.5, JSON.stringify(f));
+  w.mask = 1;
+  T('折ると段（6〜7, 行2）ができる', w.solid(6, 2) && w.solid(7, 2) && !w.solid(8, 2) && w.solid(8, 3));
+
+  // 次の折りを折るとき、前の折りが自動で戻る
+  L = mk(l => { LB.run(l, 7); LB.plank(l, 8, 10); LB.run(l, 2); LB.plate(l, 6); LB.run(l, 3); });
+  w = new World(L);
+  w.mask = 1;
+  const direct = canFold(w, 1, 24.5, 2);
+  T('前の折りが残っていると、そのままでは折れない（max）', !direct.ok && direct.why === 'max');
+  const plan = planFold(w, 1, 24.5, 2, [0]);
+  T('自動で前の折りを戻して、次を折れる', plan.ok && plan.unfold === 0, JSON.stringify(plan));
+  w.mask = 1;
+  const plan2 = planFold(w, 1, 10.5, 2, [0]);   // 板の上（戻すと運ばれる）では自動で戻さない
+  T('板の上にいて戻すと運ばれてしまうときは、自動切り替えをしない', !plan2.ok, JSON.stringify(plan2));
+
+  // トゲ：かぶせると働かない
+  L = mk(l => { LB.run(l, 7); LB.plate(l, 6); LB.run(l, 3); });
+  w = new World(L);
   const sp = w.spikes[0];
   T('トゲは折っていないとき働く', w.spikeCell(sp, 0) !== null);
-  w.mask = 1 << 1;
-  T('板をかぶせるとトゲは働かない', w.spikeCell(sp, 2) === null && w.solid(36, 2) && w.solid(39, 2));
-  const h = newHero(LEVELS[1], { x: 36.5, y: 3 });
-  T('板の上に立ってもトゲに当たらない', !hitsSpike(w, h));
-  w.mask = 0;
-  const h2 = newHero(LEVELS[1], { x: 36.5, y: 2 });
-  T('トゲの上に立つと当たる', hitsSpike(w, h2));
+  T('板をかぶせるとトゲは働かない', w.spikeCell(sp, 1) === null);
+  T('トゲの上に立つと当たる', (() => { w.mask = 0; return hitsSpike(w, newHero(L, { x: 8.5, y: 2 })); })());
+  T('板の上に立ってもトゲに当たらない', (() => { w.mask = 1; return !hitsSpike(w, newHero(L, { x: 8.5, y: 3 })); })());
 })();
 
-// --- 到達検証（全ステージ） ---
+// --- 裏面・横の折り目・二重折り ---
+(function () {
+  let L = mk(l => { LB.run(l, 7); LB.plankBackHigh(l, 8, 10); LB.run(l, 4); });
+  let w = new World(L);
+  T('裏面の板は折る前は存在しない', !w.solid(7, 2) && !w.solid(15, 2));
+  w.mask = 1;
+  let ok = true; for (let cx = 7; cx <= 14; cx++) if (!w.solid(cx, 2)) ok = false;
+  T('折ると裏面の板（上面 3）が穴にかかる', ok);
+  T('裏面の板の上で戻そうとすると「足場がない」で戻せない', (() => { const u = canUnfold(w, 0, 10.5, 3); return !u.ok && u.why === 'void'; })());
+
+  L = mk(l => { LB.run(l, 7); LB.cliffY(l, 4, 6); LB.run(l, 4); });
+  w = new World(L);
+  T('崖の高さが 6 のとき、折らないと越えられない', !solve(w, L, { allowFold: false }).solvable);
+  w.mask = 1;
+  T('横に折ると崖の上（行4〜5）が下へ折り返り、上面が 4 になる', !w.solid(8, 4) && !w.solid(8, 5) && w.solid(8, 3) && w.solid(8, 2));
+  w.mask = 0;
+  T('横の折りは、耳の下から折る（上にいると折れない）', canFold(w, 0, 5, 2).ok && !canFold(w, 0, 8, 6).ok);
+
+  L = mk(l => { LB.run(l, 7); LB.stairsY(l, 2, 8, 7); }, {});
+  w = new World(L);
+  w.mask = 1;
+  T('階段が下りてくる（行3 と 行5）', w.solid(7, 3) && w.solid(9, 5) && !w.solid(7, 12) && !w.solid(9, 10));
+  const hh = canUnfold(w, 0, 7.5, 4);
+  T('階段の上で戻すと、階段が上がって落ちる（戻せる）', hh.ok && !hh.carried, JSON.stringify(hh));
+
+  // 二重折り
+  L = mk(l => { LB.run(l, 7); LB.doubleBridge(l, 12, 14); LB.run(l, 4); }, { maxFolds: 2 });
+  w = new World(L);
+  w.mask = 1;
+  T('裏の板を折ってから、表の板も折れる', canFold(w, 1, 12.5, 2).ok);
+  w.mask = 3;
+  ok = true; for (let cx = 7; cx <= 18; cx++) if (!w.solid(cx, 1)) ok = false;
+  T('2 枚とも折ると穴（7〜18）が全部ふさがる', ok);
+  const w1 = new World(Object.assign({}, L, { maxFolds: 1 }));
+  w1.mask = 1;
+  T('1 か所しか折れない面では、2 つ目は折れない', canFold(w1, 1, 12.5, 2).why === 'max');
+  T('全 11 ステージ（3×3 + 最終 + ひみつ）', LEVELS.length === 11, 'n=' + LEVELS.length);
+  T('大きな欠片は 1-3, 2-3, 3-3 のゴールにある', LEVELS.filter(l => l.big).map(l => l.id).join() === '1-3,2-3,3-3');
+})();
+
+// --- 全ステージの到達検証 ---
 for (const lv of LEVELS) {
   const w = new World(lv);
-  const a = solve(w, lv), b = solve(w, lv, { allowFold: false });
-  T(lv.id + ' 折らないとゴールに着けない', !b.solvable);
+  const a = solve(w, lv), b = solve(w, lv, { allowFold: false, maxGap: 5 });
+  T(lv.id + ' 折らないとゴールに着けない（幅 ' + lv.w + '）', !b.solvable);
   T(lv.id + ' 折ればゴールに着ける', a.solvable, '');
-  if (a.solvable) T(lv.id + ' 解答の折り: ' + a.folds + ' 回 [' + a.steps.join(', ') + ']', a.folds >= 1);
+  if (a.solvable) T(lv.id + ' 解答の折り: ' + a.folds + ' 回', a.folds >= 3);
   lv.shards.forEach((s, i) => {
     const r = solve(w, lv, { goalFn: shardGoal(w, w.shards[i]) });
     T(lv.id + ' 欠片 ' + (i + 1) + ' に届く' + (s.back !== undefined ? '（裏面）' : ''), r.solvable);
@@ -105,12 +140,17 @@ for (const lv of LEVELS) {
     const r = solve(w, lv, { goalFn: (aa, cx, y) => Math.abs(cx + 0.5 - f.x) <= 1 && y === f.y });
     T(lv.id + ' 旗 ' + (i + 1) + ' に届く', r.solvable);
   });
-}
-
-// --- 二重折りが本当に必要か（1 か所しか折れないとゴールに着けない） ---
-for (const lv of LEVELS.filter(l => l.maxFolds === 2)) {
-  const w1 = new World(Object.assign({}, lv, { maxFolds: 1 }));
-  T(lv.id + ' 二重折りが必要（1 か所だけでは着けない）', !solve(w1, lv).solvable);
+  // どの折り目も、使わないと通れない（折らずに抜けられる所がない）
+  let allNeeded = true; const which = [];
+  lv.folds.forEach((_, k) => {
+    const lv2 = Object.assign({}, lv, { folds: lv.folds.filter((__, i) => i !== k), shards: [] });
+    if (solve(new World(lv2), lv2, { maxGap: 5 }).solvable) { allNeeded = false; which.push(k); }
+  });
+  T(lv.id + ' どの折り目も必要（使わずに通れる所がない）', allNeeded, '不要な折り目: ' + which.join(','));
+  if (lv.maxFolds === 2) {
+    const w1 = new World(Object.assign({}, lv, { maxFolds: 1 }));
+    T(lv.id + ' 二重折りが必要（1 か所だけでは着けない）', !solve(w1, lv).solvable);
+  }
 }
 
 // --- 実際の物理で通しで遊ぶボット（解答の経路をたどる） ---
@@ -121,26 +161,26 @@ function runBot(lv) {
   const h = newHero(lv), dt = 1 / 120;
   const log = [];
   let ni = 1, nodeT = 0, t = 0;
-  while (ni < r.nodes.length && t < 240) {
+  while (ni < r.nodes.length && t < 300) {
     const nd = r.nodes[ni];
     if (nd.kind === 'fold' || nd.kind === 'unfold') {
       const ccx = r.nodes[ni - 1].cx + 0.5;   // 立っているマスの中央に寄ってから折る
       if (!h.ground || Math.abs(h.x - ccx) > 0.15) {
         const dd = ccx - h.x;
         stepHero(w, h, h.ground ? { left: dd < 0, right: dd > 0 } : {}, dt); t += dt; nodeT += dt;
-        if (nodeT > 6) return { ok: false, why: "not ready for " + nd.kind + " x=" + h.x.toFixed(2), log };
+        if (nodeT > 6) return { ok: false, why: 'not ready for ' + nd.kind + ' x=' + h.x.toFixed(2), log };
         continue;
       }
       if (nd.kind === 'fold') {
         const c = canFold(w, nd.i, h.x, h.y);
         if (!c.ok) return { ok: false, why: 'cannot fold ' + nd.i + ' (' + c.why + ') x=' + h.x.toFixed(2), log };
-        w.mask |= 1 << nd.i; log.push('fold' + nd.i + '@' + h.x.toFixed(1));
+        w.mask |= 1 << nd.i; h.x = c.x; h.y = c.y; log.push('fold' + nd.i + '@' + h.x.toFixed(1));
       } else {
         const c = canUnfold(w, nd.i, h.x, h.y);
         if (!c.ok) return { ok: false, why: 'cannot unfold (' + c.why + ') x=' + h.x.toFixed(2), log };
-        w.mask &= ~(1 << nd.i); if (c.carried) h.x = c.nx; log.push('unfold@' + h.x.toFixed(1));
+        w.mask &= ~(1 << nd.i); h.x = c.nx; h.y = c.y; log.push('unfold@' + h.x.toFixed(1));
       }
-      h.vx = 0; ni++; nodeT = 0; continue;
+      h.vx = 0; h.vy = 0; ni++; nodeT = 0; continue;
     }
     // 歩き・ジャンプ
     const tx = nd.cx + 0.5;
@@ -150,7 +190,7 @@ function runBot(lv) {
     if (h.ground && dir !== 0) {
       const ahead = Math.floor(h.x + dir * 0.7), fr = Math.floor(h.y), sup = Math.floor(h.y - 0.05);
       if (w.solid(ahead, fr) || w.solid(ahead, fr + 1)) jump = true;                       // 壁
-      if (!w.solid(ahead, sup) && !w.solid(ahead, sup - 1)) jump = true;                 // 穴
+      if (!w.solid(ahead, sup) && !w.solid(ahead, sup - 1)) jump = true;                   // 穴
       for (const sp of w.spikes) { const c = w.spikeCell(sp); if (c && c[1] === fr && (c[0] === ahead || c[0] === ahead + dir)) jump = true; }   // トゲ
     }
     stepHero(w, h, { left: dir < 0, right: dir > 0, jumpPressed: jump, jumpHeld: jump || !h.ground }, dt);
@@ -166,51 +206,6 @@ for (const lv of LEVELS) {
   const r = runBot(lv);
   T(lv.id + ' ボットが実際の物理でゴールに着く' + (r.t ? '（' + r.t.toFixed(1) + ' 秒）' : ''), r.ok, r.why + ' ' + (r.log || []).join(' '));
 }
-
-// --- 横の折り目・二重折り（Phase 3） ---
-(function () {
-  const L21 = LEVELS.find(l => l.id === '2-1'), L31 = LEVELS.find(l => l.id === '3-1'), L32 = LEVELS.find(l => l.id === '3-2');
-  let w = new World(L21);
-  T('2-1 崖は折る前は高い（行5 が固い）', w.solid(19, 5) && w.solid(19, 3));
-  w.mask = 1 << 0;
-  T('2-1 横に折ると崖の上（行4〜5）が下へ折り返り、上面が 4 になる', !w.solid(19, 4) && !w.solid(19, 5) && w.solid(19, 3) && w.solid(19, 2));
-  w.mask = 0;
-  T('2-1 崖の高さが 6 のとき、地面から跳び乗れない', !solve(w, L21, { allowFold: false }).solvable);
-  w.mask = 1 << 1;
-  T('2-1 階段が下りてくる（行3 と 行5）', w.solid(28, 3) && w.solid(30, 5) && !w.solid(28, 12) && !w.solid(30, 10));
-  w.mask = 0;
-  T('折れない: 耳より上にいる（横の折り目は耳の下から）', !canFold(w, 1, 30, 9).ok && canFold(w, 1, 26, 2).ok);
-  w.mask = 1 << 1;
-  const ul = canUnfold(w, 1, 28.5, 4);
-  T('階段の上で戻そうとすると「乗っている紙は戻せない」', !ul.ok && ul.why === 'onLayer', JSON.stringify(ul));
-  w.mask = 0;
-  // 二重折り
-  w = new World(L31);
-  T('3-1 は 2 か所を同時に折れる', w.maxFolds === 2);
-  const w1 = new World(LEVELS[0]);
-  w1.mask = 1 << 0;
-  T('1 か所しか折れない面では、2 つ目は折れない', canFold(w1, 1, 14, 2).why === 'max');
-  w.mask = 1 << 0;   // 裏の板（P2）
-  T('3-1 裏の板を折ってから、表の板も折れる', canFold(w, 1, 20.5, 2).ok);
-  w.mask = 3;
-  let ok = true; for (let cx = 14; cx <= 27; cx++) if (!w.solid(cx, 1)) ok = false;
-  T('3-1 2 枚とも折ると穴（14〜27）が全部ふさがる', ok);
-  // 裏の板の上（運ばれると足場がない）では、裏の板は戻せない。表の板は戻せる
-  w.mask = 1;
-  const uu = canUnfold(w, 0, 17, 2);
-  w.mask = 3;
-  T('3-1 裏の板の上では（表の板がないと）裏の板は戻せない（足場がなくなる）', !uu.ok && uu.why === 'void', JSON.stringify(uu));
-  const u3 = canUnfold(w, 1, 17, 2);
-  T('3-1 裏の板の上でも、表の板は戻せる', u3.ok && !u3.carried, JSON.stringify(u3));
-  w = new World(L32);
-  w.mask = 1 << 0;   // 橋
-  T('3-2 橋の上で階段を折れる（二重折り）', canFold(w, 1, 19, 2).ok);
-  w.mask = 3;
-  T('3-2 橋と階段が同時に架かる', w.solid(20, 3) && w.solid(22, 5) && w.solid(16, 1));
-  // ひみつ・最終ステージの存在
-  T('全 11 ステージ（3×3 + 最終 + ひみつ）', LEVELS.length === 11, 'n=' + LEVELS.length);
-  T('大きな欠片は 1-3, 2-3, 3-3 のゴールにある', LEVELS.filter(l => l.big).map(l => l.id).join() === '1-3,2-3,3-3');
-})();
 
 document.getElementById('sum').textContent = `${pass} PASS / ${fail} FAIL`;
 document.title = (fail ? 'FAIL ' : 'OK ') + pass + '/' + (pass + fail);

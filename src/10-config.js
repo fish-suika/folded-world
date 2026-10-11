@@ -21,201 +21,282 @@ const CFG = {
     near: 9.5,       // 折り目からこの距離（マス）以内で「折る」が効く
     dur: 0.62,       // 折るアニメーションの長さ（この間は主人公も止まる）
     shakeDur: 0.4,   // 折れないときの震え
+    lift: 3,         // 折り先に体が重なったとき、上へ持ち上げられる最大の高さ
+    push: 0,         // 横への押し出しは使わない（壁越しにワープしてしまうため）
   },
   item: {
     shardR: 1.0,     // 小さな欠片を取れる距離（体の中心から）
     flagR: 1.1,      // 旗に触れる距離
     spikeH: 0.55,    // トゲの高さ（マスの下から）
   },
-  solver: { stepUp: 2, maxGap: 3 },   // 検証用の「届く」判定（実物のジャンプより少し控えめ）
+  solver: { stepUp: 2, maxGap: 4 },   // 検証用の「届く」判定（実物のジャンプ 約4.8マス・2.65マスより控えめ）
   cam: { fov: 36, dist: 21, smooth: 6, minY: 5.2 },
 };
 
-// ===== ワールド1（草原の紙）の3ステージ =====
-// rects: 紙のマス（[x, y, 幅, 高さ]）。
-// folds: 折り目。折り目 f の縦線で、幅 w・縦 y0〜y1（y1 は含まない）の「折れる耳」を
-//        dir=+1 なら右側（[f, f+w)）、-1 なら左側（[f-w, f)）に持ち、主人公がいない側へパタンと折り返す。
-//        耳は折り目を軸に鏡写しの位置（x → 2f-1-x）に来る。
+// ===== ステージの部品 =====
+// 地面は行 0〜1（上面 y=2）。L.cur が「いま置いている x」。部品を順に並べるとステージになる。
+// folds: 折り目。縦の折り目 {f, w, dir, y0, y1}（折り目 f の縦線で、幅 w・高さ y0〜y1 の耳を右(dir=+1)か左に持つ。耳は x → 2f-1-x へ）
+//        横の折り目 {axis:'y', f, h, dir, x0, x1}（折り目の高さ f の線で、x0〜x1 の耳を上(dir=+1)に高さ h。行 y → 2f-1-y へ）
 //        back: 耳の「裏面」にだけある足場（[x, y, 幅, 高さ]、元の位置の座標）。折って裏返ったときだけ現れる。
-// spikes: [x, y, 幅]。flags: チェックポイント。shards: 小さな欠片（back: 折り目の番号なら、その裏面にだけある）。
-const LEVELS = [
-  {
-    id: '1-1', name: 'はじめの紙', hint: '折ると、遠くの紙が手前に来る',
-    w: 60, h: 14,
-    start: { x: 2.5, y: 2 }, goal: { x: 58.5, y: 2 },
-    rects: [
-      [0, 0, 16, 2],    // 地面 A
-      [8, 2, 2, 3],     // 低い壁（耳 T0 の元）
-      [24, 0, 26, 2],   // 地面 B（穴1の向こう）
-      [41, 2, 4, 4],    // 崖（耳 T2 の元）
-      [54, 0, 6, 2],    // 地面 C（穴2の向こう・ゴール）
-    ],
-    folds: [
-      { f: 8,  w: 2, dir: 1, y0: 2, y1: 3 },   // T0 壁の足元を折って小さな段にする
-      { f: 24, w: 6, dir: 1, y0: 1, y1: 2 },   // T1 向こう岸の地面の表面を板にして穴にかぶせる
-      { f: 41, w: 2, dir: 1, y0: 2, y1: 4 },   // T2 崖の足元を折って階段にする
-      { f: 54, w: 4, dir: 1, y0: 1, y1: 2 },   // T3 もう一度、向こう岸の板を引き寄せる
-    ],
-    spikes: [[36, 2, 2]],
-    flags: [{ x: 33.5, y: 2 }, { x: 47.5, y: 2 }],
-    shards: [{ x: 4, y: 4 }, { x: 20, y: 4 }, { x: 43, y: 8 }],
-  },
-  {
-    id: '1-2', name: '紙のうら', hint: '折ると、裏にだけある足場が現れる',
-    w: 64, h: 14,
-    start: { x: 2.5, y: 2 }, goal: { x: 57.5, y: 8 },
-    rects: [
-      [0, 0, 15, 2],     // 地面 A
-      [23, 0, 41, 2],    // 地面 B（穴の向こうからゴールの下まで）
-      [40, 2, 4, 1],     // 出っ張り（耳 Tb の元）
-      [50, 7, 10, 1],    // 高い所の床（ゴール）
-    ],
-    folds: [
-      { f: 23, w: 8, dir: 1, y0: 2, y1: 3, back: [[23, 2, 8, 1]] },                    // Ta 裏面の橋
-      { f: 40, w: 4, dir: 1, y0: 2, y1: 3 },                                            // Tb トゲにかぶせる板
-      { f: 50, w: 4, dir: 1, y0: 3, y1: 7, back: [[52, 3, 2, 1], [50, 5, 2, 1]] },      // Tc 裏面の階段
-    ],
-    spikes: [[36, 2, 4]],
-    flags: [{ x: 33.5, y: 2 }, { x: 46.5, y: 2 }],
-    shards: [{ x: 26, y: 3, back: 0 }, { x: 37, y: 5 }, { x: 55, y: 10 }],
-  },
-  {
-    id: '1-3', name: '折り重ねる', hint: '橋・板・階段を、順番に折っていく',
-    w: 72, h: 14,
-    start: { x: 2.5, y: 2 }, goal: { x: 68.5, y: 2 },
-    rects: [
-      [0, 0, 12, 2],     // 地面 A
-      [20, 0, 16, 2],    // 地面 F1
-      [42, 0, 30, 2],    // 地面 F2（ゴールまで）
-      [53, 2, 3, 1],     // 出っ張り（耳 T4 の元）
-    ],
-    folds: [
-      { f: 20, w: 8, dir: 1, y0: 3, y1: 6, back: [[26, 3, 2, 1], [24, 5, 2, 1], [22, 5, 2, 1], [20, 3, 2, 1]] },   // Td 裏面のアーチ
-      { f: 42, w: 6, dir: 1, y0: 1, y1: 2 },   // T3 向こう岸の板
-      { f: 53, w: 3, dir: 1, y0: 2, y1: 3 },   // T4 トゲにかぶせる板
-    ],
-    spikes: [[30, 2, 2], [50, 2, 3], [60, 2, 2]],
-    flags: [{ x: 24.5, y: 2 }, { x: 48.5, y: 2 }],
-    shards: [{ x: 16, y: 7 }, { x: 45, y: 4 }, { x: 61, y: 4 }],
-  },
-];
-
-// ===== ワールド2・3・最終・ひみつ（部品を組み合わせて作る） =====
-// 地面は行 0〜1（上面 y=2）。部品は x 位置を決めて置く。
 const LB = {
-  make(id, name, hint, world, theme, w, opts = {}) {
-    return Object.assign({ id, name, hint, world, theme, w, h: 14, start: { x: 2.5, y: 2 }, rects: [], folds: [], spikes: [], flags: [], shards: [] }, opts);
+  make(id, name, hint, world, theme, opts = {}) {
+    return Object.assign({ id, name, hint, world, theme, w: 0, h: 14, cur: 0, start: { x: 2.5, y: 2 }, rects: [], folds: [], spikes: [], flags: [], shards: [] }, opts);
   },
-  ground(L, x, w) { L.rects.push([x, 0, w, 2]); },
-  // 向こう岸の地面の表面（行1）を板にして、折り目 f の左側（穴）にかぶせる
-  plankFront(L, f, w) { L.folds.push({ f, w, dir: 1, y0: 1, y1: 2 }); },
-  // 裏面にだけある板（折るまで見えない）
-  plankBack(L, f, w) { L.folds.push({ f, w, dir: 1, y0: 1, y1: 2, back: [[f, 1, w, 1]] }); },
-  // トゲ [s, s+n) と、その右に出っ張りを置き、折ってトゲにかぶせる
-  plate(L, s, n) { L.spikes.push([s, 2, n]); L.rects.push([s + n, 2, n, 1]); L.folds.push({ f: s + n, w: n, dir: 1, y0: 2, y1: 3 }); },
-  // 高い崖（上面 top）。横の折り目（高さ 4）で上を折り下ろすと、上面が 4 になる
-  cliff(L, x, w, top) { L.rects.push([x, 2, w, top - 2]); L.folds.push({ axis: 'y', f: 4, h: top - 4, dir: 1, x0: x, x1: x + w }); },
-  // 空中の足場（2マス幅×n 段）。折り目の高さ 8 で折り下ろすと、上面 4, 6, 8… の階段になる
-  stairs(L, x, n, gRow, gW) {
+  run(L, n) { L.rects.push([L.cur, 0, n, 2]); L.cur += n; },
+  pit(L, n) { L.cur += n; },
+  flag(L) { L.flags.push({ x: L.cur - 1.5, y: 2 }); },
+  shard(L, x, y, back) { L.shards.push(back === undefined ? { x, y } : { x, y, back }); },
+  // 小さな足場を、間をあけて並べる（間は落ちる）。ジャンプの正確さ
+  hop(L, n, gap, w = 2) {
+    for (let i = 0; i < n; i++) { L.rects.push([L.cur, 0, w, 2]); L.cur += w; if (i < n - 1) L.cur += gap; }
+  },
+  // 低い壁。足元の 1 段を折って、小さな段を作る
+  wallStep(L) {
+    const x = L.cur; LB.run(L, 2);
+    L.rects.push([x, 2, 2, 3]); L.folds.push({ f: x, w: 2, dir: 1, y0: 2, y1: 3 });
+    LB.run(L, 6);   // 次の障害物までの距離（段の上から跳び移れないように）
+  },
+  // 高い崖（上面 6）。足元の 2 段を折って階段にする
+  cliffStep(L) {
+    const x = L.cur; LB.run(L, 4);
+    L.rects.push([x, 2, 4, 4]); L.folds.push({ f: x, w: 2, dir: 1, y0: 2, y1: 4 });
+    LB.run(L, 6);
+  },
+  // 穴（幅 g）。向こう岸の地面の表面を板にして、穴にかぶせる
+  plank(L, g, after) {
+    LB.pit(L, g); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x, w: g, dir: 1, y0: 1, y1: 2 });
+  },
+  // 穴（幅 g）。裏面にだけある板（折るまで見えない。上面が 3 になる）
+  plankBackHigh(L, g, after) {
+    LB.pit(L, g); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x, w: g, dir: 1, y0: 2, y1: 3, back: [[x, 2, g, 1]] });
+  },
+  // 広い穴（幅 g）。手前の半分は裏の板、向こうの半分は表の板（二重折り）
+  doubleBridge(L, g, after) {
+    const h = g / 2;
+    LB.pit(L, g); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x - h, w: h, dir: 1, y0: 1, y1: 2, back: [[x - h, 1, h, 1]] });   // 裏の板（穴の中ほどが折り目）
+    L.folds.push({ f: x, w: h, dir: 1, y0: 1, y1: 2 });
+  },
+  // トゲ（幅 n）と、その右の出っ張り。折ってトゲにかぶせる
+  plate(L, n) {
+    const x = L.cur; LB.run(L, 2 * n);
+    L.spikes.push([x, 2, n]); L.rects.push([x + n, 2, n, 1]); L.folds.push({ f: x + n, w: n, dir: 1, y0: 2, y1: 3 });
+    LB.run(L, 6);
+  },
+  // 高い崖（上面 top）。横の折り目で上を折り下ろすと、上面が 4 になる
+  cliffY(L, w, top) {
+    const x = L.cur; LB.run(L, w);
+    L.rects.push([x, 2, w, top - 2]); L.folds.push({ axis: 'y', f: 4, h: top - 4, dir: 1, x0: x, x1: x + w });
+    LB.run(L, 6);
+  },
+  // 空中の足場（2マス幅×n 段）を折り下ろして階段にし、高い床（幅 gW、行 gRow）へ
+  stairsY(L, n, gW, gRow) {
+    const x = L.cur; LB.run(L, 2 * n); LB.pit(L, gW);   // 床の下は穴（階段を使わないと通れない）
     for (let i = 0; i < n; i++) L.rects.push([x + 2 * i, 12 - 2 * i, 2, 1]);
     L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x, x1: x + 2 * n });
-    if (gW > 0) L.rects.push([x + 2 * n, gRow, gW, 1]);
+    L.rects.push([x + 2 * n, gRow, gW, 1]);
   },
+  // 階段（3 段）の先の床に、塔。塔の上を折り下ろして低くし、先の床（上面 10）へ
+  stairsTower(L) {
+    const x = L.cur; LB.run(L, 6); LB.pit(L, 11 + 10);
+    for (let i = 0; i < 3; i++) L.rects.push([x + 2 * i, 12 - 2 * i, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x, x1: x + 6 });
+    L.rects.push([x + 6, 7, 11, 1]);
+    L.rects.push([x + 15, 8, 2, 5]);
+    L.folds.push({ axis: 'y', f: 10, h: 3, dir: 1, x0: x + 15, x1: x + 17 });
+    L.rects.push([x + 17, 9, 10, 1]);
+    L.towerX = x;
+  },
+  // 裏面の階段（縦の折り目）と、高い床
+  backStairsX(L, gW) {
+    const x = L.cur; LB.run(L, gW);
+    L.folds.push({ f: x, w: 4, dir: 1, y0: 3, y1: 7, back: [[x + 2, 3, 2, 1], [x, 5, 2, 1]] });
+    L.rects.push([x, 7, gW, 1]);
+  },
+  // 穴（幅 8）の上に、裏面のアーチ
+  backArch(L, after) {
+    LB.pit(L, 8); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x, w: 8, dir: 1, y0: 3, y1: 6, back: [[x + 6, 3, 2, 1], [x + 4, 5, 2, 1], [x + 2, 5, 2, 1], [x, 3, 2, 1]] });
+  },
+  // 穴（幅 7）と、向こうの崖。板と階段を同時に折る（二重折り）
+  bridgeStairs(L, after) {
+    LB.pit(L, 7); const x = L.cur; LB.run(L, after);
+    L.rects.push([x + 2, 2, 5, 4]);
+    L.folds.push({ f: x, w: 7, dir: 1, y0: 1, y1: 2 });
+    L.rects.push([x - 2, 12, 2, 1], [x, 10, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x - 2, x1: x + 2 });
+  },
+  goal(L, y = 2) { L.goal = { x: L.cur - 2.5, y }; L.w = L.cur; },
 };
 
-LEVELS.forEach(l => { l.world = 1; l.theme = 'meadow'; });
-LEVELS[2].big = 'yfold';   // 1-3 のゴールの大きな欠片：横の折り目
-
+// ===== ステージ =====
+const LEVELS = [];
 (function () {
-  // 2-1 はじめの横折り
-  let L = LB.make('2-1', 'たかさを折る', '横の折り目で、崖を低くする・高い足場を下ろす', 2, 'sunset', 48,
-    { goal: { x: 42.5, y: 8 } });
-  LB.ground(L, 0, 48); LB.cliff(L, 18, 4, 6);
-  L.spikes.push([24, 2, 2]);
-  LB.stairs(L, 28, 2, 7, 12);
-  L.flags = [{ x: 15.5, y: 2 }, { x: 26.5, y: 2 }];
-  L.shards = [{ x: 6, y: 4 }, { x: 20, y: 6 }, { x: 38, y: 10 }];
+  let L, a, b;
+  const done = lv => { LB.goal(lv); LEVELS.push(lv); };
+
+  // 1-1 はじめの紙：縦の折り目の基本。壁の足元、板、トゲの板、崖
+  L = LB.make('1-1', 'はじめの紙', '折ると、遠くの紙が手前に来る', 1, 'meadow');
+  LB.run(L, 7);
+  LB.wallStep(L); LB.run(L, 5);
+  a = L.cur; LB.hop(L, 3, 3); LB.shard(L, a + 4, 4);
+  LB.run(L, 4); LB.flag(L);
+  a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 4); LB.flag(L);
+  a = L.cur; LB.cliffStep(L); LB.shard(L, a + 2, 8); LB.run(L, 3);
+  LB.hop(L, 3, 3); LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 7, 9); LB.run(L, 6);
+  done(L);
+
+  // 1-2 紙のうら：裏面にだけある足場
+  L = LB.make('1-2', '紙のうら', '折ると、裏にだけある足場が現れる', 1, 'meadow');
+  LB.run(L, 7);
+  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 0);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3); LB.shard(L, L.cur - 10, 5);
+  LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 8, 10); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 4); LB.flag(L);
+  a = L.cur; LB.backStairsX(L, 10); LB.shard(L, a + 6, 10);
+  LB.run(L, 4);
+  L.goal = { x: a + 8.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 2-2 崖と穴
-  L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset', 64, { goal: { x: 62.5, y: 8 } });
-  LB.ground(L, 0, 14); LB.ground(L, 22, 42);
-  LB.plankFront(L, 22, 7);
-  LB.cliff(L, 30, 3, 6);
-  LB.plate(L, 40, 3);
-  LB.stairs(L, 50, 2, 7, 10);
-  L.flags = [{ x: 24.5, y: 2 }, { x: 38.5, y: 2 }, { x: 48.5, y: 2 }];
-  L.shards = [{ x: 18, y: 4 }, { x: 31, y: 6 }, { x: 58, y: 10 }];
+  // 1-3 折り重ねる：裏面のアーチと、これまでの総まとめ（ワールド1の最後：大きな欠片＝横の折り目）
+  L = LB.make('1-3', '折り重ねる', '橋・板・階段を、順番に折っていく', 1, 'meadow', { big: 'yfold' });
+  LB.run(L, 7);
+  a = L.cur; LB.backArch(L, 10); LB.shard(L, a + 3, 7);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.wallStep(L); LB.run(L, 4);
+  a = L.cur; LB.hop(L, 4, 3); LB.shard(L, a + 7, 4);
+  LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 8, 10); LB.run(L, 2);
+  LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 4); LB.flag(L);
+  LB.plankBackHigh(L, 8, 10); LB.run(L, 4);
+  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4);
+  done(L);
+
+  // 2-1 たかさを折る：横の折り目
+  L = LB.make('2-1', 'たかさを折る', '横の折り目で、崖を低くする・高い足場を下ろす', 2, 'sunset');
+  LB.run(L, 7);
+  a = L.cur; LB.cliffY(L, 4, 6); LB.shard(L, a + 1, 6);
+  LB.run(L, 4); LB.flag(L);
+  LB.hop(L, 4, 3); LB.run(L, 3);
+  LB.cliffY(L, 3, 8); LB.run(L, 4); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.stairsY(L, 2, 12, 7); LB.shard(L, a + 8, 10);
+  L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
+  LEVELS.push(L);
+
+  // 2-2 がけと穴：縦と横の折りを、順番に
+  L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset');
+  LB.run(L, 6);
+  LB.plank(L, 8, 10); LB.run(L, 2);
+  a = L.cur; LB.cliffY(L, 3, 9); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.cliffStep(L); LB.run(L, 3);
+  LB.cliffY(L, 4, 7); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 5); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.stairsY(L, 2, 12, 7); LB.shard(L, a + 8, 10);
+  L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
   // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）
-  L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', 44, { goal: { x: 39.5, y: 10 }, big: 'double' });
-  LB.ground(L, 0, 8); LB.ground(L, 16, 16);
-  LB.plankFront(L, 16, 7);
-  LB.stairs(L, 18, 3, 7, 9);                  // 階段（3段）と、空中の床 [24, 33)
-  L.rects.push([31, 8, 2, 5]);                // 床の上の塔（行 8〜12）
-  L.folds.push({ axis: 'y', f: 10, h: 3, dir: 1, x0: 31, x1: 33 });   // 塔の上を折り下ろす
-  L.rects.push([33, 9, 8, 1]);                // 塔のむこうの床（上面 10）
-  L.spikes.push([26, 8, 2]);
-  L.flags = [{ x: 24.5, y: 8 }, { x: 34.5, y: 10 }];
-  L.shards = [{ x: 12, y: 4 }, { x: 21, y: 8 }, { x: 37, y: 12 }];
+  L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', { big: 'double' });
+  LB.run(L, 6);
+  a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4); LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3);
+  LB.cliffY(L, 4, 7); LB.run(L, 3); LB.flag(L);
+  LB.hop(L, 4, 3); LB.run(L, 3);
+  LB.stairsY(L, 2, 12, 7); LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 7, 9); LB.run(L, 4); LB.flag(L);
+  LB.stairsTower(L);
+  L.spikes.push([L.towerX + 9, 8, 2]);
+  L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
+  LB.shard(L, L.towerX + 3, 8); LB.shard(L, L.towerX + 22, 12);
+  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 3-1 ふたつ同時（二重折り）
-  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', 48, { goal: { x: 46.5, y: 2 }, maxFolds: 2 });
-  LB.ground(L, 0, 14); LB.ground(L, 28, 20);
-  LB.plankBack(L, 21, 7);
-  LB.plankFront(L, 28, 7);
-  L.spikes.push([40, 2, 2]);
-  L.flags = [{ x: 36.5, y: 2 }];
-  L.shards = [{ x: 17, y: 4 }, { x: 24, y: 4 }, { x: 43, y: 4 }];
-  LEVELS.push(L);
+  // 3-1 ふたつ同時：二重折り
+  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', { maxFolds: 2 });
+  LB.run(L, 7);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 3, 4); LB.shard(L, a + 9, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
+  LB.doubleBridge(L, 14, 16); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 4);
+  LB.shard(L, L.cur - 6, 4);
+  done(L);
 
-  // 3-2 橋と階段
-  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', 48, { goal: { x: 44.5, y: 2 }, maxFolds: 2 });
-  LB.ground(L, 0, 15); LB.ground(L, 22, 26);
-  L.rects.push([24, 2, 5, 4]);
-  LB.plankFront(L, 22, 7);
-  LB.stairs(L, 20, 2, 0, 0);
-  L.spikes.push([32, 2, 2]);
-  L.flags = [{ x: 12.5, y: 2 }, { x: 30.5, y: 2 }];
-  L.shards = [{ x: 17, y: 4 }, { x: 22, y: 7 }, { x: 38, y: 4 }];
-  LEVELS.push(L);
+  // 3-2 橋と階段：板の上で階段を折る
+  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', { maxFolds: 2 });
+  LB.run(L, 7);
+  a = L.cur; LB.bridgeStairs(L, 14); LB.shard(L, a + 1, 4); LB.shard(L, a + 6, 7);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 4); LB.flag(L);
+  LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
+  LB.cliffY(L, 4, 7); LB.run(L, 5);
+  done(L);
 
   // 3-3 みっつの橋（ワールド3の最後：大きな欠片）
-  L = LB.make('3-3', 'みっつの橋', '二重の橋、トゲの板、橋と階段', 3, 'night', 72, { goal: { x: 65.5, y: 8 }, maxFolds: 2, big: 'final' });
-  LB.ground(L, 0, 12); LB.ground(L, 24, 24); LB.ground(L, 56, 16);
-  LB.plankBack(L, 18, 6);
-  LB.plankFront(L, 24, 6);
-  LB.plate(L, 32, 4);
-  LB.plankFront(L, 56, 7);
-  LB.stairs(L, 53, 3, 7, 8);
-  L.flags = [{ x: 30.5, y: 2 }, { x: 44.5, y: 2 }];
-  L.shards = [{ x: 15, y: 4 }, { x: 34, y: 5 }, { x: 62, y: 10 }];
+  L = LB.make('3-3', 'みっつの橋', '二重の橋、トゲの板、橋と階段', 3, 'night', { maxFolds: 2, big: 'final' });
+  LB.run(L, 6);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.cliffStep(L); LB.run(L, 3);
+  LB.plate(L, 7); LB.run(L, 4); LB.flag(L);
+  LB.pit(L, 8); b = L.cur; LB.run(L, 22);
+  L.folds.push({ f: b, w: 7, dir: 1, y0: 1, y1: 2 });
+  L.rects.push([b - 2, 12, 2, 1], [b, 10, 2, 1], [b + 2, 8, 2, 1], [b + 4, 7, 10, 1]);
+  L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: b - 2, x1: b + 4 });
+  LB.shard(L, b + 7, 10);
+  L.goal = { x: b + 11.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
   // 4 おりたたまれた世界（最終ステージ）
-  L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', 96, { goal: { x: 92.5, y: 2 }, maxFolds: 2, final: true });
-  LB.ground(L, 0, 10); LB.ground(L, 22, 26); LB.ground(L, 56, 40);
-  LB.plankBack(L, 16, 6);
-  LB.plankFront(L, 22, 6);
-  LB.cliff(L, 30, 3, 6);
-  LB.plate(L, 38, 4);
-  LB.plankFront(L, 56, 7);
-  LB.stairs(L, 53, 3, 7, 10);
-  LB.plate(L, 80, 4);
-  L.flags = [{ x: 28.5, y: 2 }, { x: 35.5, y: 2 }, { x: 46.5, y: 2 }, { x: 72.5, y: 2 }];
-  L.shards = [{ x: 13, y: 4 }, { x: 31, y: 6 }, { x: 62, y: 10 }];
+  L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', { maxFolds: 2, final: true });
+  LB.run(L, 6);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.cliffY(L, 4, 8); LB.run(L, 3);
+  LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
+  LB.hop(L, 5, 3); LB.run(L, 3);
+  LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 3); LB.flag(L);
+  LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
+  LB.backArch(L, 10); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.stairsTower(L);
+  L.spikes.push([L.towerX + 9, 8, 2]);
+  L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
+  LB.shard(L, L.towerX + 22, 12);
+  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
   LEVELS.push(L);
 
   // H ひみつの紙（小さな欠片を 20 個集めると開く）
-  L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'gold', 52, { goal: { x: 48.5, y: 8 }, maxFolds: 2, needShards: 20 });
-  LB.ground(L, 0, 10); LB.ground(L, 22, 30);
-  LB.plankBack(L, 16, 6);
-  LB.plankFront(L, 22, 6);
-  LB.plate(L, 30, 3);
-  LB.stairs(L, 38, 3, 7, 8);
-  L.flags = [{ x: 28.5, y: 2 }, { x: 36.5, y: 2 }];
-  L.shards = [{ x: 13, y: 4 }, { x: 32, y: 4 }, { x: 44, y: 10 }];
+  L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'secret', { maxFolds: 2, needShards: 20 });
+  LB.run(L, 6);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3);
+  LB.hop(L, 5, 3); LB.shard(L, L.cur - 8, 4); LB.run(L, 3); LB.flag(L);
+  LB.cliffY(L, 3, 9); LB.run(L, 3);
+  LB.wallStep(L); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.stairsY(L, 3, 8, 7); LB.shard(L, a + 10, 10);
+  L.goal = { x: a + 12.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 })();

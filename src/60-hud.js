@@ -58,6 +58,23 @@ function tryLandscape() {
   }).catch(() => {});
 }
 
+// 文を文節の切れ目（、。！など）で区切って、言葉の途中で改行されないようにする
+function wrapPhrases(el) {
+  const walk = node => {
+    for (const c of [...node.childNodes]) {
+      if (c.nodeType === 3) {
+        const parts = c.nodeValue.split(/(?<=[、。！？）」])|(?=[（「])/).filter(s => s.length);
+        if (parts.length < 2 && !c.nodeValue.trim()) continue;
+        const f = document.createDocumentFragment();
+        parts.forEach(p => { const s = document.createElement("span"); s.className = "ph"; s.textContent = p; f.appendChild(s); });
+        c.replaceWith(f);
+      } else if (c.nodeType === 1 && !c.classList.contains("ph") && c.tagName !== "KBD") walk(c);
+    }
+  };
+  walk(el);
+}
+document.querySelectorAll(".screen p, .help").forEach(wrapPhrases);
+
 const HUD = {
   show(name) {
     ['scTitle', 'scSelect', 'scPause', 'scClear', 'scEnding', 'scHelp'].forEach(id => $(id).classList.toggle('on', id === name));
@@ -73,7 +90,7 @@ const HUD = {
   },
   canFold(on) { document.body.classList.toggle('canfold', on); },
   toast(text) {
-    const t = $('toast'); t.textContent = text; t.classList.add('on');
+    const t = $('toast'); t.textContent = text; wrapPhrases(t); t.classList.add('on');
     clearTimeout(HUD._tt); HUD._tt = setTimeout(() => t.classList.remove('on'), 1500);
   },
 };

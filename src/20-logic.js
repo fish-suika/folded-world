@@ -126,7 +126,36 @@ function compatible(w, i, j) {
   return !hit(w.targetRect(a), b) && !hit(w.targetRect(b), a);
 }
 
-// 折れる？  { ok, why }  why: far / side / active / max / compat / overlap / onTab
+// 体が盤面（折り状態 mask）にめり込んでいないか
+function heroFits(w, x, y, mask) {
+  const [x0, x1, y0, y1] = heroCells(x, y);
+  for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) if (w.solid(cx, cy, mask)) return false;
+  return true;
+}
+function heroSupported(w, x, y, mask) {
+  const [x0, x1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  for (let cx = x0; cx <= x1; cx++) if (w.solid(cx, row, mask)) return true;
+  return false;
+}
+// 折り先に体が重なるとき：上へ持ち上げて紙の上に乗せる（最大 CFG.fold.lift マス）。だめなら横へ押し出す。
+// 返り値 { x, y } または null（どうしても入らない）
+function resolveFit(w, x, y, mask) {
+  if (heroFits(w, x, y, mask)) return { x, y };
+  for (let dy = 1; dy <= CFG.fold.lift; dy++)
+    if (heroFits(w, x, y + dy, mask) && heroSupported(w, x, y + dy, mask)) return { x, y: y + dy };
+  for (const needSupport of [true, false])
+    for (let d = 0.5; d <= CFG.fold.push + 1e-9; d += 0.5)
+      for (const s of [1, -1]) {
+        const nx = x + s * d;
+        if (heroFits(w, nx, y, mask) && (!needSupport || heroSupported(w, nx, y, mask))) return { x: nx, y };
+      }
+  return null;
+}
+
+// 折れる？  { ok, why, x, y, carried }
+//   why: far / side / active / max / compat / overlap
+//   折り先に体が重なっても、紙の上に持ち上げる（または押し出す）ので折れる。耳の上に乗っていたら、耳ごと運ぶ（縦の折り目）
 function canFold(w, i, x, y) {
   const fd = w.folds[i];
   if (w.isOn(i)) return { ok: false, why: 'active' };
@@ -139,18 +168,19 @@ function canFold(w, i, x, y) {
     if (fd.dir > 0 ? y >= fd.f : y < fd.f) return { ok: false, why: 'side' };
     if (Math.abs(y - fd.f) > CFG.fold.near || x < fd.x0 - 4 || x > fd.x1 + 4) return { ok: false, why: 'far' };
   }
-  const [x0, x1, y0, y1] = heroCells(x, y);
+  const [x0, x1] = heroCells(x, y);
   const row = Math.floor(y - 0.05);
-  for (let cx = x0; cx <= x1; cx++) {
-    for (let cy = y0; cy <= y1; cy++) {
-      if (w.inTarget(fd, cx, cy)) { const m = w.mir(fd, cx, cy); if (w.srcSolid(fd, m[0], m[1])) return { ok: false, why: 'overlap' }; }
-    }
-    if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) return { ok: false, why: 'onTab' };   // 耳の上に乗っている
-  }
-  return { ok: true };
+  let onTab = false;
+  for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
+  const carried = onTab && fd.axis === 'x';
+  const nx = carried ? 2 * fd.f - x : x;
+  const res = resolveFit(w, nx, y, w.mask | (1 << i));
+  if (!res) return { ok: false, why: 'overlap' };
+  return { ok: true, x: res.x, y: res.y, carried };
 }
 
-// 折り目 j を戻せる？  { ok, carried, nx }  耳の上に乗っていたら、耳ごと元の位置へ運ばれる（縦の折り目のみ）
+// 折り目 j を戻せる？  { ok, why, carried, nx, y }
+//   耳の上に乗っていたら、耳ごと元の位置へ運ばれる（縦の折り目のみ）。戻した紙が体に重なるときは持ち上げる
 function canUnfold(w, j, x, y) {
   if (!w.isOn(j)) return { ok: false, why: 'none' };
   const fd = w.folds[j];
@@ -164,19 +194,32 @@ function canUnfold(w, j, x, y) {
       if (k === j) onJ = true; else onOther = true;
     }
   }
-  const carried = onJ && !kept && !onOther;
-  if (carried && fd.axis === 'y') return { ok: false, why: 'onLayer' };   // 上下の折りは運べない
-  const nx = carried ? 2 * fd.f - x : x;
+  const carried = onJ && !kept && !onOther && fd.axis === 'x';
   const mask2 = w.mask & ~(1 << j);
-  const [a0, a1, b0, b1] = heroCells(nx, y);
-  for (let cx = a0; cx <= a1; cx++) for (let cy = b0; cy <= b1; cy++)
-    if (w.solid(cx, cy, mask2)) return { ok: false, why: 'overlap' };   // 戻すと紙に埋まる
-  if (onJ) {   // 戻した後の足場があるか（裏面の足場の上で戻すと落ちる）
-    let sup = false;
-    for (let cx = a0; cx <= a1; cx++) if (w.solid(cx, row, mask2)) sup = true;
-    if (!sup) return { ok: false, why: 'void' };
+  const res = resolveFit(w, carried ? 2 * fd.f - x : x, y, mask2);
+  if (!res) return { ok: false, why: 'overlap' };
+  // 縦の折りで運ばれた先に足場がなければ（裏面の板の上）、落ちてしまうので戻せない
+  if (carried && !heroSupported(w, res.x, res.y, mask2)) return { ok: false, why: 'void' };
+  return { ok: true, carried, nx: res.x, y: res.y };
+}
+
+// 次に折りたい折り目 j を、前の折りを自動で戻しながら折る計画
+//   { ok, unfold: 戻す折り目（なければ -1）, r: canFold の結果 }。order は古い順の折っている番号
+function planFold(w, j, x, y, order) {
+  const r = canFold(w, j, x, y);
+  if (r.ok) return { ok: true, unfold: -1, r };
+  if (r.why !== 'max' && r.why !== 'compat') return { ok: false, why: r.why };
+  const saved = w.mask;
+  for (const i of order) {
+    if (!w.isOn(i)) continue;
+    const u = canUnfold(w, i, x, y);
+    if (!u.ok || u.carried || u.nx !== x || u.y !== y) continue;   // 自動で戻すのは、主人公が動かないときだけ
+    w.mask = saved & ~(1 << i);
+    const f = canFold(w, j, x, y);
+    w.mask = saved;
+    if (f.ok) return { ok: true, unfold: i, r: f };
   }
-  return { ok: true, carried, nx };
+  return { ok: false, why: r.why };
 }
 
 // ---- 主人公の物理（足元が y、中心が x） ----
@@ -235,6 +278,15 @@ function stepHero(w, h, inp, dt) {
 }
 
 // ---- 到達検証：「立てるマス」の間を、歩き・ジャンプ・折る・戻すでつないで、目的に着けるか ----
+// 折ったあとの位置 (x, y) から、そのまま立てるか、落ちて着く先を探す（着けなければ null）
+function settle(w, x, y, mask) {
+  const cx = Math.floor(x);
+  if (heroSupported(w, x, y, mask)) return [cx, y];
+  for (let yy = Math.floor(y) - 1; yy >= 0; yy--)
+    if (w.solid(cx, yy - 1, mask) && !w.solid(cx, yy, mask) && !w.solid(cx, yy + 1, mask)) return [cx, yy];
+  return null;
+}
+
 function surfaces(w, cx, mask) {
   const out = [];
   if (cx < 0 || cx >= w.W) return out;
@@ -271,7 +323,8 @@ function solve(w, level, opts = {}) {
     const [m, cx, y] = q.shift();
     if (goalFn(m, cx, y)) { found = key(m, cx, y); break; }
     const from = key(m, cx, y);
-    for (let dx = -CFG.solver.maxGap; dx <= CFG.solver.maxGap; dx++) {
+    const mg = opts.maxGap || CFG.solver.maxGap;
+    for (let dx = -mg; dx <= mg; dx++) {
       if (dx === 0) continue;
       const nx = cx + dx, step = Math.sign(dx);
       let blocked = false;
@@ -291,9 +344,9 @@ function solve(w, level, opts = {}) {
       for (let i = 0; i < w.folds.length; i++) {
         if (m >> i & 1) {
           const r = canUnfold(w, i, hx, y);
-          if (r.ok) push(from, m & ~(1 << i), Math.floor(r.nx), y, 'unfold', i);
+          if (r.ok) { const s = settle(w, r.nx, r.y, m & ~(1 << i)); if (s) push(from, m & ~(1 << i), s[0], s[1], 'unfold', i); }
         } else if (hingeDist(w.folds[i], hx, y) <= CFG.fold.near - 0.6 && canFold(w, i, hx, y).ok) {
-          push(from, m | (1 << i), cx, y, 'fold', i);
+          { const r = canFold(w, i, hx, y); const s = settle(w, r.x, r.y, m | (1 << i)); if (s) push(from, m | (1 << i), s[0], s[1], 'fold', i); }
         }
       }
     }

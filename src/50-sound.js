@@ -65,7 +65,7 @@ const SND = (function () {
     meadow: { bpm: 96,  root: 60, scale: [0, 2, 4, 7, 9], bass: [0, 7, 9, 5], wave: 'triangle' },
     sunset: { bpm: 84,  root: 62, scale: [0, 3, 5, 7, 10], bass: [0, 5, 3, 7], wave: 'sine' },
     night:  { bpm: 72,  root: 57, scale: [0, 3, 5, 7, 10], bass: [0, 3, 5, 2], wave: 'sine' },
-    gold:   { bpm: 112, root: 67, scale: [0, 2, 4, 7, 9], bass: [0, 4, 7, 4], wave: 'triangle' },
+    secret: { bpm: 112, root: 67, scale: [0, 2, 4, 7, 9], bass: [0, 4, 7, 4], wave: 'triangle' },
   };
   function rnd(i) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 

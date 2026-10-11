@@ -14,6 +14,11 @@
     touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
   html,body{height:100vh;height:100dvh}
   button{font-family:var(--jp);touch-action:manipulation;cursor:pointer}
+  /* 改行は文節の切れ目で（言葉の途中で切れない）。短いラベルは折り返さない */
+  body{word-break:auto-phrase;overflow-wrap:anywhere;line-break:strict}
+  p,h1,h2,small,.help{text-wrap:balance}
+  .ph{display:inline-block}
+  .tag,.btn,.tb,.wlab,.card b,.card .nm,.card .st,#prompt,#toast,#bMute{white-space:nowrap}
 
   /* ---- 16:9 の枠。画面に収まる最大の 16:9 を中央に置く ---- */
   #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);aspect-ratio:16/9;
@@ -31,14 +36,16 @@
   #tagStage{left:2.2cqw}
   #tagTime{right:2.2cqw;font-variant-numeric:tabular-nums}
   #tagShard{right:15cqw;color:#9a6b00}
-  .cards{display:flex;flex-direction:column;gap:1.1cqw;margin-top:.2cqw}
+  .cards{display:flex;flex-direction:column;gap:.6cqw}
+  #scSelect{gap:.8cqw;padding:1cqw 2cqw}
+  #scSelect h2{font-size:3.4cqw;line-height:1.2}
   .wrow{display:flex;gap:1.4cqw;align-items:stretch;justify-content:center}
-  .wlab{width:13cqw;display:flex;align-items:center;justify-content:center;font-size:1.7cqw;font-weight:700;letter-spacing:.06em;line-height:1.5}
-  .card{width:20cqw;padding:.7cqw .8cqw;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
+  .wlab{width:15cqw;display:flex;align-items:center;justify-content:center;font-size:1.7cqw;font-weight:700;letter-spacing:.06em;line-height:1.5}
+  .card{width:21cqw;padding:.35cqw .8cqw;line-height:1.45;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
   .card:active{transform:translateY(.4cqw);box-shadow:0 .2cqw 0 #cfc3a8}
   .card b{display:inline;font-size:1.9cqw;letter-spacing:.08em;margin-right:.6cqw}
   .card .nm{display:inline;font-size:1.8cqw;font-weight:700}
-  .card .ht{display:block;font-size:1.25cqw;opacity:.7}
+  .card .ht{display:block;font-size:1.15cqw;opacity:.7}
   .card .st{display:block;font-size:1.5cqw;color:#9a6b00;letter-spacing:.1em}
   #bMute{position:absolute;top:2.2cqw;left:50%;transform:translateX(-50%);pointer-events:auto;border:0;border-radius:2cqw;padding:.5cqw 1.4cqw;font-size:1.8cqw;font-weight:700;background:rgba(251,244,226,.88);color:var(--ink);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
   #tagStage{max-width:34cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -54,12 +61,12 @@
   #toast.on{opacity:1}
 
   /* ---- 画面（タイトル・ポーズ・クリア） ---- */
-  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2.2cqw;
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:safe center;overflow:auto;padding:2cqw 3cqw;text-align:center;gap:2.2cqw;
     background:rgba(255,246,224,.9);z-index:5}
   .screen.on{display:flex}
   .screen h1{font-size:6.4cqw;letter-spacing:.12em;color:var(--ink);text-shadow:.35cqw .35cqw 0 #ffd36b}
-  .screen h2{font-size:5cqw;letter-spacing:.14em;text-shadow:.3cqw .3cqw 0 #ffd36b}
-  .screen p{font-size:2.1cqw;line-height:1.9;letter-spacing:.06em}
+  .screen h2{font-size:4cqw;letter-spacing:.14em;text-shadow:.3cqw .3cqw 0 #ffd36b}
+  .screen p{font-size:2.6cqw;line-height:1.9;letter-spacing:.06em}
   .screen small{font-size:1.7cqw;opacity:.75;letter-spacing:.05em;line-height:1.8}
   .btn{font-size:2.6cqw;font-weight:800;letter-spacing:.2em;padding:1cqw 5cqw;border:0;border-radius:4cqw;background:var(--coral);color:#fff;
     box-shadow:0 .6cqw 0 #c4482e;transition:transform .08s}
@@ -111,14 +118,12 @@
 
   <div class="screen on" id="scTitle">
     <h1>折りたたまれた世界</h1>
-    <p>紙の世界を折って、道を作ろう。<br>折り目（点線）の近くで「折る」と、紙がパタンと反対側にかさなる。</p>
+    <p>紙を折って、道を作ろう。</p>
     <div class="row"><button class="btn" id="btnStart">はじめる</button><button class="btn sub" id="btnHelp1">あそびかた</button></div>
-    <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>U</kbd> / <kbd>Shift</kbd> 戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
   </div>
   <div class="screen" id="scSelect">
-    <h2>ワールド1　草原の紙</h2>
+    <h2>ステージをえらぶ</h2>
     <div class="cards" id="cards"></div>
-    <small>小さな欠片は ◆ で数える（集めなくてもクリアできる）</small>
   </div>
   <div class="screen" id="scEnding">
     <h1>おしまい</h1>
@@ -131,9 +136,9 @@
     <div class="help">
       <b>目的</b>：旗（ゴール）まで進む。落ちる・トゲに触れると、最後の旗（チェックポイント）から再開。<br>
       <b>折る</b>：点線の近くで <kbd>F</kbd>。黄色い「耳」の紙が、折り目を軸に反対側へパタンと重なる。<br>
-      <b>戻す</b>：もう一度 <kbd>F</kbd>（二重折りの面では <kbd>U</kbd> / <kbd>Shift</kbd>）。耳の上に乗って戻すと、耳ごと元の位置へ運ばれる。<br>
+      <b>戻す</b>：もう一度 <kbd>F</kbd>。次の折り目を折ると、前の折りは自動で戻る。二重折りの面では 2 か所まで同時に折れて、<kbd>U</kbd> / <kbd>Shift</kbd> で戻す。<br>
       <b>裏面</b>：折ると、紙の裏にだけある足場や欠片が現れる。<br>
-      <b>折れないとき</b>：紙が重なる位置や、乗っている耳は折れない。耳が震えて知らせる。<br>
+      <b>重なったとき</b>：折る場所に自分がいても大丈夫。紙の上に乗せてくれる。耳の上に乗って折ると、耳ごと運ばれる。<br>
       <b>小さな欠片</b>：各ステージ 3 個。集めなくてもクリアできる。20 個で「ひみつの紙」が開く。<br>
       <b>困ったら</b>：ポーズ（<kbd>Esc</kbd>）の「ヒント」で、次に使う折り目が光る。
     </div>
@@ -174,202 +179,283 @@ const CFG = {
     near: 9.5,       // 折り目からこの距離（マス）以内で「折る」が効く
     dur: 0.62,       // 折るアニメーションの長さ（この間は主人公も止まる）
     shakeDur: 0.4,   // 折れないときの震え
+    lift: 3,         // 折り先に体が重なったとき、上へ持ち上げられる最大の高さ
+    push: 0,         // 横への押し出しは使わない（壁越しにワープしてしまうため）
   },
   item: {
     shardR: 1.0,     // 小さな欠片を取れる距離（体の中心から）
     flagR: 1.1,      // 旗に触れる距離
     spikeH: 0.55,    // トゲの高さ（マスの下から）
   },
-  solver: { stepUp: 2, maxGap: 3 },   // 検証用の「届く」判定（実物のジャンプより少し控えめ）
+  solver: { stepUp: 2, maxGap: 4 },   // 検証用の「届く」判定（実物のジャンプ 約4.8マス・2.65マスより控えめ）
   cam: { fov: 36, dist: 21, smooth: 6, minY: 5.2 },
 };
 
-// ===== ワールド1（草原の紙）の3ステージ =====
-// rects: 紙のマス（[x, y, 幅, 高さ]）。
-// folds: 折り目。折り目 f の縦線で、幅 w・縦 y0〜y1（y1 は含まない）の「折れる耳」を
-//        dir=+1 なら右側（[f, f+w)）、-1 なら左側（[f-w, f)）に持ち、主人公がいない側へパタンと折り返す。
-//        耳は折り目を軸に鏡写しの位置（x → 2f-1-x）に来る。
+// ===== ステージの部品 =====
+// 地面は行 0〜1（上面 y=2）。L.cur が「いま置いている x」。部品を順に並べるとステージになる。
+// folds: 折り目。縦の折り目 {f, w, dir, y0, y1}（折り目 f の縦線で、幅 w・高さ y0〜y1 の耳を右(dir=+1)か左に持つ。耳は x → 2f-1-x へ）
+//        横の折り目 {axis:'y', f, h, dir, x0, x1}（折り目の高さ f の線で、x0〜x1 の耳を上(dir=+1)に高さ h。行 y → 2f-1-y へ）
 //        back: 耳の「裏面」にだけある足場（[x, y, 幅, 高さ]、元の位置の座標）。折って裏返ったときだけ現れる。
-// spikes: [x, y, 幅]。flags: チェックポイント。shards: 小さな欠片（back: 折り目の番号なら、その裏面にだけある）。
-const LEVELS = [
-  {
-    id: '1-1', name: 'はじめの紙', hint: '折ると、遠くの紙が手前に来る',
-    w: 60, h: 14,
-    start: { x: 2.5, y: 2 }, goal: { x: 58.5, y: 2 },
-    rects: [
-      [0, 0, 16, 2],    // 地面 A
-      [8, 2, 2, 3],     // 低い壁（耳 T0 の元）
-      [24, 0, 26, 2],   // 地面 B（穴1の向こう）
-      [41, 2, 4, 4],    // 崖（耳 T2 の元）
-      [54, 0, 6, 2],    // 地面 C（穴2の向こう・ゴール）
-    ],
-    folds: [
-      { f: 8,  w: 2, dir: 1, y0: 2, y1: 3 },   // T0 壁の足元を折って小さな段にする
-      { f: 24, w: 6, dir: 1, y0: 1, y1: 2 },   // T1 向こう岸の地面の表面を板にして穴にかぶせる
-      { f: 41, w: 2, dir: 1, y0: 2, y1: 4 },   // T2 崖の足元を折って階段にする
-      { f: 54, w: 4, dir: 1, y0: 1, y1: 2 },   // T3 もう一度、向こう岸の板を引き寄せる
-    ],
-    spikes: [[36, 2, 2]],
-    flags: [{ x: 33.5, y: 2 }, { x: 47.5, y: 2 }],
-    shards: [{ x: 4, y: 4 }, { x: 20, y: 4 }, { x: 43, y: 8 }],
-  },
-  {
-    id: '1-2', name: '紙のうら', hint: '折ると、裏にだけある足場が現れる',
-    w: 64, h: 14,
-    start: { x: 2.5, y: 2 }, goal: { x: 57.5, y: 8 },
-    rects: [
-      [0, 0, 15, 2],     // 地面 A
-      [23, 0, 41, 2],    // 地面 B（穴の向こうからゴールの下まで）
-      [40, 2, 4, 1],     // 出っ張り（耳 Tb の元）
-      [50, 7, 10, 1],    // 高い所の床（ゴール）
-    ],
-    folds: [
-      { f: 23, w: 8, dir: 1, y0: 2, y1: 3, back: [[23, 2, 8, 1]] },                    // Ta 裏面の橋
-      { f: 40, w: 4, dir: 1, y0: 2, y1: 3 },                                            // Tb トゲにかぶせる板
-      { f: 50, w: 4, dir: 1, y0: 3, y1: 7, back: [[52, 3, 2, 1], [50, 5, 2, 1]] },      // Tc 裏面の階段
-    ],
-    spikes: [[36, 2, 4]],
-    flags: [{ x: 33.5, y: 2 }, { x: 46.5, y: 2 }],
-    shards: [{ x: 26, y: 3, back: 0 }, { x: 37, y: 5 }, { x: 55, y: 10 }],
-  },
-  {
-    id: '1-3', name: '折り重ねる', hint: '橋・板・階段を、順番に折っていく',
-    w: 72, h: 14,
-    start: { x: 2.5, y: 2 }, goal: { x: 68.5, y: 2 },
-    rects: [
-      [0, 0, 12, 2],     // 地面 A
-      [20, 0, 16, 2],    // 地面 F1
-      [42, 0, 30, 2],    // 地面 F2（ゴールまで）
-      [53, 2, 3, 1],     // 出っ張り（耳 T4 の元）
-    ],
-    folds: [
-      { f: 20, w: 8, dir: 1, y0: 3, y1: 6, back: [[26, 3, 2, 1], [24, 5, 2, 1], [22, 5, 2, 1], [20, 3, 2, 1]] },   // Td 裏面のアーチ
-      { f: 42, w: 6, dir: 1, y0: 1, y1: 2 },   // T3 向こう岸の板
-      { f: 53, w: 3, dir: 1, y0: 2, y1: 3 },   // T4 トゲにかぶせる板
-    ],
-    spikes: [[30, 2, 2], [50, 2, 3], [60, 2, 2]],
-    flags: [{ x: 24.5, y: 2 }, { x: 48.5, y: 2 }],
-    shards: [{ x: 16, y: 7 }, { x: 45, y: 4 }, { x: 61, y: 4 }],
-  },
-];
-
-// ===== ワールド2・3・最終・ひみつ（部品を組み合わせて作る） =====
-// 地面は行 0〜1（上面 y=2）。部品は x 位置を決めて置く。
 const LB = {
-  make(id, name, hint, world, theme, w, opts = {}) {
-    return Object.assign({ id, name, hint, world, theme, w, h: 14, start: { x: 2.5, y: 2 }, rects: [], folds: [], spikes: [], flags: [], shards: [] }, opts);
+  make(id, name, hint, world, theme, opts = {}) {
+    return Object.assign({ id, name, hint, world, theme, w: 0, h: 14, cur: 0, start: { x: 2.5, y: 2 }, rects: [], folds: [], spikes: [], flags: [], shards: [] }, opts);
   },
-  ground(L, x, w) { L.rects.push([x, 0, w, 2]); },
-  // 向こう岸の地面の表面（行1）を板にして、折り目 f の左側（穴）にかぶせる
-  plankFront(L, f, w) { L.folds.push({ f, w, dir: 1, y0: 1, y1: 2 }); },
-  // 裏面にだけある板（折るまで見えない）
-  plankBack(L, f, w) { L.folds.push({ f, w, dir: 1, y0: 1, y1: 2, back: [[f, 1, w, 1]] }); },
-  // トゲ [s, s+n) と、その右に出っ張りを置き、折ってトゲにかぶせる
-  plate(L, s, n) { L.spikes.push([s, 2, n]); L.rects.push([s + n, 2, n, 1]); L.folds.push({ f: s + n, w: n, dir: 1, y0: 2, y1: 3 }); },
-  // 高い崖（上面 top）。横の折り目（高さ 4）で上を折り下ろすと、上面が 4 になる
-  cliff(L, x, w, top) { L.rects.push([x, 2, w, top - 2]); L.folds.push({ axis: 'y', f: 4, h: top - 4, dir: 1, x0: x, x1: x + w }); },
-  // 空中の足場（2マス幅×n 段）。折り目の高さ 8 で折り下ろすと、上面 4, 6, 8… の階段になる
-  stairs(L, x, n, gRow, gW) {
+  run(L, n) { L.rects.push([L.cur, 0, n, 2]); L.cur += n; },
+  pit(L, n) { L.cur += n; },
+  flag(L) { L.flags.push({ x: L.cur - 1.5, y: 2 }); },
+  shard(L, x, y, back) { L.shards.push(back === undefined ? { x, y } : { x, y, back }); },
+  // 小さな足場を、間をあけて並べる（間は落ちる）。ジャンプの正確さ
+  hop(L, n, gap, w = 2) {
+    for (let i = 0; i < n; i++) { L.rects.push([L.cur, 0, w, 2]); L.cur += w; if (i < n - 1) L.cur += gap; }
+  },
+  // 低い壁。足元の 1 段を折って、小さな段を作る
+  wallStep(L) {
+    const x = L.cur; LB.run(L, 2);
+    L.rects.push([x, 2, 2, 3]); L.folds.push({ f: x, w: 2, dir: 1, y0: 2, y1: 3 });
+    LB.run(L, 6);   // 次の障害物までの距離（段の上から跳び移れないように）
+  },
+  // 高い崖（上面 6）。足元の 2 段を折って階段にする
+  cliffStep(L) {
+    const x = L.cur; LB.run(L, 4);
+    L.rects.push([x, 2, 4, 4]); L.folds.push({ f: x, w: 2, dir: 1, y0: 2, y1: 4 });
+    LB.run(L, 6);
+  },
+  // 穴（幅 g）。向こう岸の地面の表面を板にして、穴にかぶせる
+  plank(L, g, after) {
+    LB.pit(L, g); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x, w: g, dir: 1, y0: 1, y1: 2 });
+  },
+  // 穴（幅 g）。裏面にだけある板（折るまで見えない。上面が 3 になる）
+  plankBackHigh(L, g, after) {
+    LB.pit(L, g); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x, w: g, dir: 1, y0: 2, y1: 3, back: [[x, 2, g, 1]] });
+  },
+  // 広い穴（幅 g）。手前の半分は裏の板、向こうの半分は表の板（二重折り）
+  doubleBridge(L, g, after) {
+    const h = g / 2;
+    LB.pit(L, g); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x - h, w: h, dir: 1, y0: 1, y1: 2, back: [[x - h, 1, h, 1]] });   // 裏の板（穴の中ほどが折り目）
+    L.folds.push({ f: x, w: h, dir: 1, y0: 1, y1: 2 });
+  },
+  // トゲ（幅 n）と、その右の出っ張り。折ってトゲにかぶせる
+  plate(L, n) {
+    const x = L.cur; LB.run(L, 2 * n);
+    L.spikes.push([x, 2, n]); L.rects.push([x + n, 2, n, 1]); L.folds.push({ f: x + n, w: n, dir: 1, y0: 2, y1: 3 });
+    LB.run(L, 6);
+  },
+  // 高い崖（上面 top）。横の折り目で上を折り下ろすと、上面が 4 になる
+  cliffY(L, w, top) {
+    const x = L.cur; LB.run(L, w);
+    L.rects.push([x, 2, w, top - 2]); L.folds.push({ axis: 'y', f: 4, h: top - 4, dir: 1, x0: x, x1: x + w });
+    LB.run(L, 6);
+  },
+  // 空中の足場（2マス幅×n 段）を折り下ろして階段にし、高い床（幅 gW、行 gRow）へ
+  stairsY(L, n, gW, gRow) {
+    const x = L.cur; LB.run(L, 2 * n); LB.pit(L, gW);   // 床の下は穴（階段を使わないと通れない）
     for (let i = 0; i < n; i++) L.rects.push([x + 2 * i, 12 - 2 * i, 2, 1]);
     L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x, x1: x + 2 * n });
-    if (gW > 0) L.rects.push([x + 2 * n, gRow, gW, 1]);
+    L.rects.push([x + 2 * n, gRow, gW, 1]);
   },
+  // 階段（3 段）の先の床に、塔。塔の上を折り下ろして低くし、先の床（上面 10）へ
+  stairsTower(L) {
+    const x = L.cur; LB.run(L, 6); LB.pit(L, 11 + 10);
+    for (let i = 0; i < 3; i++) L.rects.push([x + 2 * i, 12 - 2 * i, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x, x1: x + 6 });
+    L.rects.push([x + 6, 7, 11, 1]);
+    L.rects.push([x + 15, 8, 2, 5]);
+    L.folds.push({ axis: 'y', f: 10, h: 3, dir: 1, x0: x + 15, x1: x + 17 });
+    L.rects.push([x + 17, 9, 10, 1]);
+    L.towerX = x;
+  },
+  // 裏面の階段（縦の折り目）と、高い床
+  backStairsX(L, gW) {
+    const x = L.cur; LB.run(L, gW);
+    L.folds.push({ f: x, w: 4, dir: 1, y0: 3, y1: 7, back: [[x + 2, 3, 2, 1], [x, 5, 2, 1]] });
+    L.rects.push([x, 7, gW, 1]);
+  },
+  // 穴（幅 8）の上に、裏面のアーチ
+  backArch(L, after) {
+    LB.pit(L, 8); const x = L.cur; LB.run(L, after);
+    L.folds.push({ f: x, w: 8, dir: 1, y0: 3, y1: 6, back: [[x + 6, 3, 2, 1], [x + 4, 5, 2, 1], [x + 2, 5, 2, 1], [x, 3, 2, 1]] });
+  },
+  // 穴（幅 7）と、向こうの崖。板と階段を同時に折る（二重折り）
+  bridgeStairs(L, after) {
+    LB.pit(L, 7); const x = L.cur; LB.run(L, after);
+    L.rects.push([x + 2, 2, 5, 4]);
+    L.folds.push({ f: x, w: 7, dir: 1, y0: 1, y1: 2 });
+    L.rects.push([x - 2, 12, 2, 1], [x, 10, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x - 2, x1: x + 2 });
+  },
+  goal(L, y = 2) { L.goal = { x: L.cur - 2.5, y }; L.w = L.cur; },
 };
 
-LEVELS.forEach(l => { l.world = 1; l.theme = 'meadow'; });
-LEVELS[2].big = 'yfold';   // 1-3 のゴールの大きな欠片：横の折り目
-
+// ===== ステージ =====
+const LEVELS = [];
 (function () {
-  // 2-1 はじめの横折り
-  let L = LB.make('2-1', 'たかさを折る', '横の折り目で、崖を低くする・高い足場を下ろす', 2, 'sunset', 48,
-    { goal: { x: 42.5, y: 8 } });
-  LB.ground(L, 0, 48); LB.cliff(L, 18, 4, 6);
-  L.spikes.push([24, 2, 2]);
-  LB.stairs(L, 28, 2, 7, 12);
-  L.flags = [{ x: 15.5, y: 2 }, { x: 26.5, y: 2 }];
-  L.shards = [{ x: 6, y: 4 }, { x: 20, y: 6 }, { x: 38, y: 10 }];
+  let L, a, b;
+  const done = lv => { LB.goal(lv); LEVELS.push(lv); };
+
+  // 1-1 はじめの紙：縦の折り目の基本。壁の足元、板、トゲの板、崖
+  L = LB.make('1-1', 'はじめの紙', '折ると、遠くの紙が手前に来る', 1, 'meadow');
+  LB.run(L, 7);
+  LB.wallStep(L); LB.run(L, 5);
+  a = L.cur; LB.hop(L, 3, 3); LB.shard(L, a + 4, 4);
+  LB.run(L, 4); LB.flag(L);
+  a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 4); LB.flag(L);
+  a = L.cur; LB.cliffStep(L); LB.shard(L, a + 2, 8); LB.run(L, 3);
+  LB.hop(L, 3, 3); LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 7, 9); LB.run(L, 6);
+  done(L);
+
+  // 1-2 紙のうら：裏面にだけある足場
+  L = LB.make('1-2', '紙のうら', '折ると、裏にだけある足場が現れる', 1, 'meadow');
+  LB.run(L, 7);
+  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 0);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3); LB.shard(L, L.cur - 10, 5);
+  LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 8, 10); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 4); LB.flag(L);
+  a = L.cur; LB.backStairsX(L, 10); LB.shard(L, a + 6, 10);
+  LB.run(L, 4);
+  L.goal = { x: a + 8.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 2-2 崖と穴
-  L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset', 64, { goal: { x: 62.5, y: 8 } });
-  LB.ground(L, 0, 14); LB.ground(L, 22, 42);
-  LB.plankFront(L, 22, 7);
-  LB.cliff(L, 30, 3, 6);
-  LB.plate(L, 40, 3);
-  LB.stairs(L, 50, 2, 7, 10);
-  L.flags = [{ x: 24.5, y: 2 }, { x: 38.5, y: 2 }, { x: 48.5, y: 2 }];
-  L.shards = [{ x: 18, y: 4 }, { x: 31, y: 6 }, { x: 58, y: 10 }];
+  // 1-3 折り重ねる：裏面のアーチと、これまでの総まとめ（ワールド1の最後：大きな欠片＝横の折り目）
+  L = LB.make('1-3', '折り重ねる', '橋・板・階段を、順番に折っていく', 1, 'meadow', { big: 'yfold' });
+  LB.run(L, 7);
+  a = L.cur; LB.backArch(L, 10); LB.shard(L, a + 3, 7);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.wallStep(L); LB.run(L, 4);
+  a = L.cur; LB.hop(L, 4, 3); LB.shard(L, a + 7, 4);
+  LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 8, 10); LB.run(L, 2);
+  LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 4); LB.flag(L);
+  LB.plankBackHigh(L, 8, 10); LB.run(L, 4);
+  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4);
+  done(L);
+
+  // 2-1 たかさを折る：横の折り目
+  L = LB.make('2-1', 'たかさを折る', '横の折り目で、崖を低くする・高い足場を下ろす', 2, 'sunset');
+  LB.run(L, 7);
+  a = L.cur; LB.cliffY(L, 4, 6); LB.shard(L, a + 1, 6);
+  LB.run(L, 4); LB.flag(L);
+  LB.hop(L, 4, 3); LB.run(L, 3);
+  LB.cliffY(L, 3, 8); LB.run(L, 4); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.stairsY(L, 2, 12, 7); LB.shard(L, a + 8, 10);
+  L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
+  LEVELS.push(L);
+
+  // 2-2 がけと穴：縦と横の折りを、順番に
+  L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset');
+  LB.run(L, 6);
+  LB.plank(L, 8, 10); LB.run(L, 2);
+  a = L.cur; LB.cliffY(L, 3, 9); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.cliffStep(L); LB.run(L, 3);
+  LB.cliffY(L, 4, 7); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 5); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.stairsY(L, 2, 12, 7); LB.shard(L, a + 8, 10);
+  L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
   // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）
-  L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', 44, { goal: { x: 39.5, y: 10 }, big: 'double' });
-  LB.ground(L, 0, 8); LB.ground(L, 16, 16);
-  LB.plankFront(L, 16, 7);
-  LB.stairs(L, 18, 3, 7, 9);                  // 階段（3段）と、空中の床 [24, 33)
-  L.rects.push([31, 8, 2, 5]);                // 床の上の塔（行 8〜12）
-  L.folds.push({ axis: 'y', f: 10, h: 3, dir: 1, x0: 31, x1: 33 });   // 塔の上を折り下ろす
-  L.rects.push([33, 9, 8, 1]);                // 塔のむこうの床（上面 10）
-  L.spikes.push([26, 8, 2]);
-  L.flags = [{ x: 24.5, y: 8 }, { x: 34.5, y: 10 }];
-  L.shards = [{ x: 12, y: 4 }, { x: 21, y: 8 }, { x: 37, y: 12 }];
+  L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', { big: 'double' });
+  LB.run(L, 6);
+  a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4); LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3);
+  LB.cliffY(L, 4, 7); LB.run(L, 3); LB.flag(L);
+  LB.hop(L, 4, 3); LB.run(L, 3);
+  LB.stairsY(L, 2, 12, 7); LB.run(L, 3); LB.flag(L);
+  LB.plank(L, 7, 9); LB.run(L, 4); LB.flag(L);
+  LB.stairsTower(L);
+  L.spikes.push([L.towerX + 9, 8, 2]);
+  L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
+  LB.shard(L, L.towerX + 3, 8); LB.shard(L, L.towerX + 22, 12);
+  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 3-1 ふたつ同時（二重折り）
-  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', 48, { goal: { x: 46.5, y: 2 }, maxFolds: 2 });
-  LB.ground(L, 0, 14); LB.ground(L, 28, 20);
-  LB.plankBack(L, 21, 7);
-  LB.plankFront(L, 28, 7);
-  L.spikes.push([40, 2, 2]);
-  L.flags = [{ x: 36.5, y: 2 }];
-  L.shards = [{ x: 17, y: 4 }, { x: 24, y: 4 }, { x: 43, y: 4 }];
-  LEVELS.push(L);
+  // 3-1 ふたつ同時：二重折り
+  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', { maxFolds: 2 });
+  LB.run(L, 7);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 3, 4); LB.shard(L, a + 9, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
+  LB.doubleBridge(L, 14, 16); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 6); LB.run(L, 4);
+  LB.shard(L, L.cur - 6, 4);
+  done(L);
 
-  // 3-2 橋と階段
-  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', 48, { goal: { x: 44.5, y: 2 }, maxFolds: 2 });
-  LB.ground(L, 0, 15); LB.ground(L, 22, 26);
-  L.rects.push([24, 2, 5, 4]);
-  LB.plankFront(L, 22, 7);
-  LB.stairs(L, 20, 2, 0, 0);
-  L.spikes.push([32, 2, 2]);
-  L.flags = [{ x: 12.5, y: 2 }, { x: 30.5, y: 2 }];
-  L.shards = [{ x: 17, y: 4 }, { x: 22, y: 7 }, { x: 38, y: 4 }];
-  LEVELS.push(L);
+  // 3-2 橋と階段：板の上で階段を折る
+  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', { maxFolds: 2 });
+  LB.run(L, 7);
+  a = L.cur; LB.bridgeStairs(L, 14); LB.shard(L, a + 1, 4); LB.shard(L, a + 6, 7);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 7); LB.run(L, 3);
+  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 4); LB.flag(L);
+  LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
+  LB.cliffY(L, 4, 7); LB.run(L, 5);
+  done(L);
 
   // 3-3 みっつの橋（ワールド3の最後：大きな欠片）
-  L = LB.make('3-3', 'みっつの橋', '二重の橋、トゲの板、橋と階段', 3, 'night', 72, { goal: { x: 65.5, y: 8 }, maxFolds: 2, big: 'final' });
-  LB.ground(L, 0, 12); LB.ground(L, 24, 24); LB.ground(L, 56, 16);
-  LB.plankBack(L, 18, 6);
-  LB.plankFront(L, 24, 6);
-  LB.plate(L, 32, 4);
-  LB.plankFront(L, 56, 7);
-  LB.stairs(L, 53, 3, 7, 8);
-  L.flags = [{ x: 30.5, y: 2 }, { x: 44.5, y: 2 }];
-  L.shards = [{ x: 15, y: 4 }, { x: 34, y: 5 }, { x: 62, y: 10 }];
+  L = LB.make('3-3', 'みっつの橋', '二重の橋、トゲの板、橋と階段', 3, 'night', { maxFolds: 2, big: 'final' });
+  LB.run(L, 6);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.cliffStep(L); LB.run(L, 3);
+  LB.plate(L, 7); LB.run(L, 4); LB.flag(L);
+  LB.pit(L, 8); b = L.cur; LB.run(L, 22);
+  L.folds.push({ f: b, w: 7, dir: 1, y0: 1, y1: 2 });
+  L.rects.push([b - 2, 12, 2, 1], [b, 10, 2, 1], [b + 2, 8, 2, 1], [b + 4, 7, 10, 1]);
+  L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: b - 2, x1: b + 4 });
+  LB.shard(L, b + 7, 10);
+  L.goal = { x: b + 11.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
   // 4 おりたたまれた世界（最終ステージ）
-  L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', 96, { goal: { x: 92.5, y: 2 }, maxFolds: 2, final: true });
-  LB.ground(L, 0, 10); LB.ground(L, 22, 26); LB.ground(L, 56, 40);
-  LB.plankBack(L, 16, 6);
-  LB.plankFront(L, 22, 6);
-  LB.cliff(L, 30, 3, 6);
-  LB.plate(L, 38, 4);
-  LB.plankFront(L, 56, 7);
-  LB.stairs(L, 53, 3, 7, 10);
-  LB.plate(L, 80, 4);
-  L.flags = [{ x: 28.5, y: 2 }, { x: 35.5, y: 2 }, { x: 46.5, y: 2 }, { x: 72.5, y: 2 }];
-  L.shards = [{ x: 13, y: 4 }, { x: 31, y: 6 }, { x: 62, y: 10 }];
+  L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', { maxFolds: 2, final: true });
+  LB.run(L, 6);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.cliffY(L, 4, 8); LB.run(L, 3);
+  LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
+  LB.hop(L, 5, 3); LB.run(L, 3);
+  LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 3); LB.flag(L);
+  LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
+  LB.backArch(L, 10); LB.run(L, 3); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.stairsTower(L);
+  L.spikes.push([L.towerX + 9, 8, 2]);
+  L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
+  LB.shard(L, L.towerX + 22, 12);
+  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
   LEVELS.push(L);
 
   // H ひみつの紙（小さな欠片を 20 個集めると開く）
-  L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'gold', 52, { goal: { x: 48.5, y: 8 }, maxFolds: 2, needShards: 20 });
-  LB.ground(L, 0, 10); LB.ground(L, 22, 30);
-  LB.plankBack(L, 16, 6);
-  LB.plankFront(L, 22, 6);
-  LB.plate(L, 30, 3);
-  LB.stairs(L, 38, 3, 7, 8);
-  L.flags = [{ x: 28.5, y: 2 }, { x: 36.5, y: 2 }];
-  L.shards = [{ x: 13, y: 4 }, { x: 32, y: 4 }, { x: 44, y: 10 }];
+  L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'secret', { maxFolds: 2, needShards: 20 });
+  LB.run(L, 6);
+  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
+  LB.run(L, 2); LB.flag(L);
+  LB.plate(L, 8); LB.run(L, 3);
+  LB.hop(L, 5, 3); LB.shard(L, L.cur - 8, 4); LB.run(L, 3); LB.flag(L);
+  LB.cliffY(L, 3, 9); LB.run(L, 3);
+  LB.wallStep(L); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.stairsY(L, 3, 8, 7); LB.shard(L, a + 10, 10);
+  L.goal = { x: a + 12.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 })();
 // ===== 盤面・折りのルール・主人公の物理・到達検証（three.js を使わない部分） =====
@@ -500,7 +586,36 @@ function compatible(w, i, j) {
   return !hit(w.targetRect(a), b) && !hit(w.targetRect(b), a);
 }
 
-// 折れる？  { ok, why }  why: far / side / active / max / compat / overlap / onTab
+// 体が盤面（折り状態 mask）にめり込んでいないか
+function heroFits(w, x, y, mask) {
+  const [x0, x1, y0, y1] = heroCells(x, y);
+  for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) if (w.solid(cx, cy, mask)) return false;
+  return true;
+}
+function heroSupported(w, x, y, mask) {
+  const [x0, x1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  for (let cx = x0; cx <= x1; cx++) if (w.solid(cx, row, mask)) return true;
+  return false;
+}
+// 折り先に体が重なるとき：上へ持ち上げて紙の上に乗せる（最大 CFG.fold.lift マス）。だめなら横へ押し出す。
+// 返り値 { x, y } または null（どうしても入らない）
+function resolveFit(w, x, y, mask) {
+  if (heroFits(w, x, y, mask)) return { x, y };
+  for (let dy = 1; dy <= CFG.fold.lift; dy++)
+    if (heroFits(w, x, y + dy, mask) && heroSupported(w, x, y + dy, mask)) return { x, y: y + dy };
+  for (const needSupport of [true, false])
+    for (let d = 0.5; d <= CFG.fold.push + 1e-9; d += 0.5)
+      for (const s of [1, -1]) {
+        const nx = x + s * d;
+        if (heroFits(w, nx, y, mask) && (!needSupport || heroSupported(w, nx, y, mask))) return { x: nx, y };
+      }
+  return null;
+}
+
+// 折れる？  { ok, why, x, y, carried }
+//   why: far / side / active / max / compat / overlap
+//   折り先に体が重なっても、紙の上に持ち上げる（または押し出す）ので折れる。耳の上に乗っていたら、耳ごと運ぶ（縦の折り目）
 function canFold(w, i, x, y) {
   const fd = w.folds[i];
   if (w.isOn(i)) return { ok: false, why: 'active' };
@@ -513,18 +628,19 @@ function canFold(w, i, x, y) {
     if (fd.dir > 0 ? y >= fd.f : y < fd.f) return { ok: false, why: 'side' };
     if (Math.abs(y - fd.f) > CFG.fold.near || x < fd.x0 - 4 || x > fd.x1 + 4) return { ok: false, why: 'far' };
   }
-  const [x0, x1, y0, y1] = heroCells(x, y);
+  const [x0, x1] = heroCells(x, y);
   const row = Math.floor(y - 0.05);
-  for (let cx = x0; cx <= x1; cx++) {
-    for (let cy = y0; cy <= y1; cy++) {
-      if (w.inTarget(fd, cx, cy)) { const m = w.mir(fd, cx, cy); if (w.srcSolid(fd, m[0], m[1])) return { ok: false, why: 'overlap' }; }
-    }
-    if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) return { ok: false, why: 'onTab' };   // 耳の上に乗っている
-  }
-  return { ok: true };
+  let onTab = false;
+  for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
+  const carried = onTab && fd.axis === 'x';
+  const nx = carried ? 2 * fd.f - x : x;
+  const res = resolveFit(w, nx, y, w.mask | (1 << i));
+  if (!res) return { ok: false, why: 'overlap' };
+  return { ok: true, x: res.x, y: res.y, carried };
 }
 
-// 折り目 j を戻せる？  { ok, carried, nx }  耳の上に乗っていたら、耳ごと元の位置へ運ばれる（縦の折り目のみ）
+// 折り目 j を戻せる？  { ok, why, carried, nx, y }
+//   耳の上に乗っていたら、耳ごと元の位置へ運ばれる（縦の折り目のみ）。戻した紙が体に重なるときは持ち上げる
 function canUnfold(w, j, x, y) {
   if (!w.isOn(j)) return { ok: false, why: 'none' };
   const fd = w.folds[j];
@@ -538,19 +654,32 @@ function canUnfold(w, j, x, y) {
       if (k === j) onJ = true; else onOther = true;
     }
   }
-  const carried = onJ && !kept && !onOther;
-  if (carried && fd.axis === 'y') return { ok: false, why: 'onLayer' };   // 上下の折りは運べない
-  const nx = carried ? 2 * fd.f - x : x;
+  const carried = onJ && !kept && !onOther && fd.axis === 'x';
   const mask2 = w.mask & ~(1 << j);
-  const [a0, a1, b0, b1] = heroCells(nx, y);
-  for (let cx = a0; cx <= a1; cx++) for (let cy = b0; cy <= b1; cy++)
-    if (w.solid(cx, cy, mask2)) return { ok: false, why: 'overlap' };   // 戻すと紙に埋まる
-  if (onJ) {   // 戻した後の足場があるか（裏面の足場の上で戻すと落ちる）
-    let sup = false;
-    for (let cx = a0; cx <= a1; cx++) if (w.solid(cx, row, mask2)) sup = true;
-    if (!sup) return { ok: false, why: 'void' };
+  const res = resolveFit(w, carried ? 2 * fd.f - x : x, y, mask2);
+  if (!res) return { ok: false, why: 'overlap' };
+  // 縦の折りで運ばれた先に足場がなければ（裏面の板の上）、落ちてしまうので戻せない
+  if (carried && !heroSupported(w, res.x, res.y, mask2)) return { ok: false, why: 'void' };
+  return { ok: true, carried, nx: res.x, y: res.y };
+}
+
+// 次に折りたい折り目 j を、前の折りを自動で戻しながら折る計画
+//   { ok, unfold: 戻す折り目（なければ -1）, r: canFold の結果 }。order は古い順の折っている番号
+function planFold(w, j, x, y, order) {
+  const r = canFold(w, j, x, y);
+  if (r.ok) return { ok: true, unfold: -1, r };
+  if (r.why !== 'max' && r.why !== 'compat') return { ok: false, why: r.why };
+  const saved = w.mask;
+  for (const i of order) {
+    if (!w.isOn(i)) continue;
+    const u = canUnfold(w, i, x, y);
+    if (!u.ok || u.carried || u.nx !== x || u.y !== y) continue;   // 自動で戻すのは、主人公が動かないときだけ
+    w.mask = saved & ~(1 << i);
+    const f = canFold(w, j, x, y);
+    w.mask = saved;
+    if (f.ok) return { ok: true, unfold: i, r: f };
   }
-  return { ok: true, carried, nx };
+  return { ok: false, why: r.why };
 }
 
 // ---- 主人公の物理（足元が y、中心が x） ----
@@ -609,6 +738,15 @@ function stepHero(w, h, inp, dt) {
 }
 
 // ---- 到達検証：「立てるマス」の間を、歩き・ジャンプ・折る・戻すでつないで、目的に着けるか ----
+// 折ったあとの位置 (x, y) から、そのまま立てるか、落ちて着く先を探す（着けなければ null）
+function settle(w, x, y, mask) {
+  const cx = Math.floor(x);
+  if (heroSupported(w, x, y, mask)) return [cx, y];
+  for (let yy = Math.floor(y) - 1; yy >= 0; yy--)
+    if (w.solid(cx, yy - 1, mask) && !w.solid(cx, yy, mask) && !w.solid(cx, yy + 1, mask)) return [cx, yy];
+  return null;
+}
+
 function surfaces(w, cx, mask) {
   const out = [];
   if (cx < 0 || cx >= w.W) return out;
@@ -645,7 +783,8 @@ function solve(w, level, opts = {}) {
     const [m, cx, y] = q.shift();
     if (goalFn(m, cx, y)) { found = key(m, cx, y); break; }
     const from = key(m, cx, y);
-    for (let dx = -CFG.solver.maxGap; dx <= CFG.solver.maxGap; dx++) {
+    const mg = opts.maxGap || CFG.solver.maxGap;
+    for (let dx = -mg; dx <= mg; dx++) {
       if (dx === 0) continue;
       const nx = cx + dx, step = Math.sign(dx);
       let blocked = false;
@@ -665,9 +804,9 @@ function solve(w, level, opts = {}) {
       for (let i = 0; i < w.folds.length; i++) {
         if (m >> i & 1) {
           const r = canUnfold(w, i, hx, y);
-          if (r.ok) push(from, m & ~(1 << i), Math.floor(r.nx), y, 'unfold', i);
+          if (r.ok) { const s = settle(w, r.nx, r.y, m & ~(1 << i)); if (s) push(from, m & ~(1 << i), s[0], s[1], 'unfold', i); }
         } else if (hingeDist(w.folds[i], hx, y) <= CFG.fold.near - 0.6 && canFold(w, i, hx, y).ok) {
-          push(from, m | (1 << i), cx, y, 'fold', i);
+          { const r = canFold(w, i, hx, y); const s = settle(w, r.x, r.y, m | (1 << i)); if (s) push(from, m | (1 << i), s[0], s[1], 'fold', i); }
         }
       }
     }
@@ -931,8 +1070,8 @@ const GAME3D = (function () {
               hills: [0xf8cdb0, 0xf0ab94, 0xdc8b7c], trees: [0xc4654f, 0xe28a6a], hemi: [0xfff1e0, 0xd9a98c, 0.82], sun: 0xffd9a8 },
     night:  { sky: 'linear-gradient(#141a48 0%,#2f3a7a 55%,#5a5aa8 100%)', ground: 0x5b6dbc, groundBack: 0x434f94, cap: 0x8b9af0, wall: 0x7a64b8, wallBack: 0x5a4a96,
               hills: [0x4a549a, 0x38417f, 0x2c3468], trees: [0x3f4ea6, 0x4a9fb4], hemi: [0xc2c9ff, 0x4a5090, 0.8], sun: 0xc6ccff, stars: true },
-    gold:   { sky: 'linear-gradient(#ffe27a 0%,#fff0b8 55%,#ffffff 100%)', ground: 0xf6d568, groundBack: 0xd9b33f, cap: 0xe8a820, wall: 0xffb86b, wallBack: 0xd9904a,
-              hills: [0xfff0c0, 0xffe39a, 0xffd37a], trees: [0xe0a33a, 0xf2c25a], hemi: [0xffffff, 0xffe6a0, 0.85], sun: 0xfff4d0 },
+    secret: { sky: 'linear-gradient(#cdb8f0 0%,#e8dcfa 55%,#fbefff 100%)', ground: 0xb9a0e6, groundBack: 0x9a7fcc, cap: 0x8a66d8, wall: 0x86c9d6, wallBack: 0x62a6b6,
+              hills: [0xe9defa, 0xd9c8f4, 0xc6afea], trees: [0x9a7be0, 0x7fb8d8], hemi: [0xffffff, 0xcfc0ee, 0.8], sun: 0xfff2ff },
   };
   function applyTheme(name) {
     const t = THEMES[name] || THEMES.meadow;
@@ -967,24 +1106,42 @@ const GAME3D = (function () {
     heroRoot.add(heroBody);
     const orange = new THREE.MeshLambertMaterial({ color: 0xff8f3a, map: TEX.a });
     const white = new THREE.MeshLambertMaterial({ color: 0xfffaf0, map: TEX.a });
+    const pink = new THREE.MeshLambertMaterial({ color: 0xffb6a0 });
     const dark = new THREE.MeshLambertMaterial({ color: 0x3a2a20 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.34), orange); body.position.set(0, 0.55, 0);
-    const belly = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.4, 0.04), white); belly.position.set(0.1, 0.5, 0.19);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.46, 0.4), orange); head.position.set(0.12, 1.12, 0);
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.34, 4), white); snout.rotation.z = -Math.PI / 2; snout.position.set(0.56, 1.05, 0);
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), dark); nose.position.set(0.72, 1.05, 0);
-    const earG = new THREE.ConeGeometry(0.16, 0.42, 4);
-    const ear1 = new THREE.Mesh(earG, orange); ear1.position.set(0.0, 1.5, 0.12);
-    const ear2 = new THREE.Mesh(earG, orange); ear2.position.set(0.24, 1.5, -0.12);
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.05), dark); eye.position.set(0.36, 1.18, 0.21);
-    const eye2 = eye.clone(); eye2.position.z = -0.21;
-    heroTail = new THREE.Group(); heroTail.position.set(-0.3, 0.45, 0);
-    const tailM = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.85, 4), orange); tailM.rotation.z = Math.PI / 2 + 0.5; tailM.position.set(-0.4, 0.1, 0);
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), white); tip.rotation.z = Math.PI / 2 + 0.5; tip.position.set(-0.78, 0.3, 0);
-    heroTail.add(tailM, tip);
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.3), orange); legs.position.set(0, 0.12, 0);
-    [body, belly, head, snout, nose, ear1, ear2, eye, eye2, tailM, tip, legs].forEach(m => { m.castShadow = true; });
-    heroBody.add(body, belly, head, snout, nose, ear1, ear2, eye, eye2, heroTail, legs);
+    const ball = (r, mat, sx, sy, sz, x, y, z) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), mat);
+      m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.castShadow = true; return m;
+    };
+    const body = ball(0.42, orange, 1.0, 0.92, 0.86, 0, 0.5, 0);               // ころんとした体
+    const belly = ball(0.3, white, 0.8, 0.85, 0.5, 0.14, 0.44, 0.2);
+    const head = ball(0.42, orange, 1.12, 0.96, 1.02, 0.12, 1.08, 0);          // 大きな丸い頭
+    const cheekL = ball(0.17, white, 1, 0.9, 0.8, 0.36, 0.98, 0.24);
+    const cheekR = ball(0.17, white, 1, 0.9, 0.8, 0.36, 0.98, -0.24);
+    const snout = ball(0.15, white, 1.2, 0.85, 0.95, 0.52, 1.03, 0);
+    const nose = ball(0.065, dark, 1, 0.8, 1, 0.66, 1.07, 0);
+    const eyeL = ball(0.075, dark, 0.7, 1.15, 0.7, 0.4, 1.2, 0.26);
+    const eyeR = ball(0.075, dark, 0.7, 1.15, 0.7, 0.4, 1.2, -0.26);
+    const glintL = ball(0.028, white, 1, 1, 1, 0.44, 1.25, 0.3);
+    const glintR = ball(0.028, white, 1, 1, 1, 0.44, 1.25, -0.3);
+    const blushL = ball(0.06, pink, 1, 0.7, 0.4, 0.34, 1.05, 0.34);
+    const blushR = ball(0.06, pink, 1, 0.7, 0.4, 0.34, 1.05, -0.34);
+    const earG = new THREE.ConeGeometry(0.17, 0.42, 20);
+    const earIn = new THREE.ConeGeometry(0.09, 0.26, 16);
+    const mkEar = z => {
+      const g = new THREE.Group();
+      const o = new THREE.Mesh(earG, orange), i = new THREE.Mesh(earIn, pink);
+      o.castShadow = true; i.position.set(0.02, -0.04, 0.07 * Math.sign(z)); g.add(o, i);
+      g.position.set(0.08, 1.52, z); g.rotation.z = -0.15; g.rotation.x = 0.18 * -Math.sign(z);
+      return g;
+    };
+    const earL = mkEar(0.2), earR = mkEar(-0.2);
+    heroTail = new THREE.Group(); heroTail.position.set(-0.34, 0.5, 0);        // ふわふわのしっぽ
+    const tailBall = ball(0.3, orange, 1.35, 1, 1, -0.38, 0.12, 0);
+    const tailTip = ball(0.17, white, 1, 1, 1, -0.74, 0.2, 0);
+    heroTail.add(tailBall, tailTip); heroTail.rotation.z = 0.2;
+    const footL = ball(0.14, orange, 1.2, 0.8, 1, 0.22, 0.1, 0.17);
+    const footR = ball(0.14, orange, 1.2, 0.8, 1, -0.05, 0.1, -0.17);
+    heroBody.add(body, belly, head, cheekL, cheekR, snout, nose, eyeL, eyeR, glintL, glintR, blushL, blushR, earL, earR, heroTail, footL, footR);
     scene.add(heroRoot);
   }
 
@@ -1043,13 +1200,15 @@ const GAME3D = (function () {
 
   // st: { hero, world, anim, shake:{i,t}|null, candidate, time, squash, got:[bool], flagsHit:[bool] }
   function update(dt, st) {
-    const { hero, world, anim, shake } = st;
+    const { hero, world, shake } = st;
+    const anims = st.anims || [];
     // 折りの角度
     const prog = [];
     for (let i = 0; i < foldGroups.length; i++) {
       const fd = world.folds[i];
       let p = world.isOn(i) ? 1 : 0;
-      if (anim && anim.i === i) { const e = ease(anim.t / CFG.fold.dur); p = anim.fold ? e : 1 - e; }
+      const an = anims.find(a => a.i === i);
+      if (an) { const e = ease(an.t / CFG.fold.dur); p = an.fold ? e : 1 - e; }
       prog[i] = p;
       const sgn = fd.axis === 'x' ? -fd.dir : fd.dir;
       let rot = sgn * Math.PI * p;
@@ -1073,7 +1232,7 @@ const GAME3D = (function () {
       e.m.rotation.y = st.time * 2.2;
       e.m.scale.y = 1.3 + Math.sin(st.time * 4 + idx) * 0.08;
     }
-    for (const e of spikeMeshes) e.g.visible = world.spikeCell(e.sp) !== null || (anim && e.fi >= 0);
+    for (const e of spikeMeshes) e.g.visible = world.spikeCell(e.sp) !== null || (anims.length > 0 && e.fi >= 0);
     flagMeshes.forEach((e, i) => {
       const hit = st.flagsHit[i];
       e.cm.color.setHex(hit ? 0xffb938 : 0xb8b2a5);
@@ -1081,12 +1240,16 @@ const GAME3D = (function () {
     });
     // 主人公
     let hx = hero.x, hy = hero.y, hz = 0;
-    if (anim && anim.carried) {
-      const fd = world.folds[anim.i];
-      const e = ease(anim.t / CFG.fold.dur), p = anim.fold ? e : 1 - e;   // 折れた角度（1 = 完全に折れている）
-      const d1 = anim.x1 - fd.f;                                          // 元の位置の折り目からの距離
-      hx = fd.f + d1 * Math.cos(Math.PI * p);
-      hz = Math.abs(d1) * Math.sin(Math.PI * p);
+    const ha = anims.find(a => a.carried || a.x1 !== a.x0 || a.y1 !== a.y0);
+    if (ha) {
+      const e = ease(ha.t / CFG.fold.dur);
+      hy = ha.y0 + (ha.y1 - ha.y0) * e;
+      if (ha.carried) {   // 耳ごと弧を描いて運ばれる
+        const fd = world.folds[ha.i], p = ha.fold ? e : 1 - e;
+        const d = ha.fold ? ha.x0 - fd.f : ha.x1 - fd.f;   // 元の位置の折り目からの距離
+        hx = fd.f + d * Math.cos(Math.PI * p);
+        hz = Math.abs(d) * Math.sin(Math.PI * p);
+      } else hx = ha.x0 + (ha.x1 - ha.x0) * e;
     }
     heroRoot.position.set(hx, hy, hz);
     heroRoot.scale.x = hero.face >= 0 ? 1 : -1;
@@ -1215,7 +1378,7 @@ const SND = (function () {
     meadow: { bpm: 96,  root: 60, scale: [0, 2, 4, 7, 9], bass: [0, 7, 9, 5], wave: 'triangle' },
     sunset: { bpm: 84,  root: 62, scale: [0, 3, 5, 7, 10], bass: [0, 5, 3, 7], wave: 'sine' },
     night:  { bpm: 72,  root: 57, scale: [0, 3, 5, 7, 10], bass: [0, 3, 5, 2], wave: 'sine' },
-    gold:   { bpm: 112, root: 67, scale: [0, 2, 4, 7, 9], bass: [0, 4, 7, 4], wave: 'triangle' },
+    secret: { bpm: 112, root: 67, scale: [0, 2, 4, 7, 9], bass: [0, 4, 7, 4], wave: 'triangle' },
   };
   function rnd(i) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 
@@ -1323,6 +1486,23 @@ function tryLandscape() {
   }).catch(() => {});
 }
 
+// 文を文節の切れ目（、。！など）で区切って、言葉の途中で改行されないようにする
+function wrapPhrases(el) {
+  const walk = node => {
+    for (const c of [...node.childNodes]) {
+      if (c.nodeType === 3) {
+        const parts = c.nodeValue.split(/(?<=[、。！？）」])|(?=[（「])/).filter(s => s.length);
+        if (parts.length < 2 && !c.nodeValue.trim()) continue;
+        const f = document.createDocumentFragment();
+        parts.forEach(p => { const s = document.createElement("span"); s.className = "ph"; s.textContent = p; f.appendChild(s); });
+        c.replaceWith(f);
+      } else if (c.nodeType === 1 && !c.classList.contains("ph") && c.tagName !== "KBD") walk(c);
+    }
+  };
+  walk(el);
+}
+document.querySelectorAll(".screen p, .help").forEach(wrapPhrases);
+
 const HUD = {
   show(name) {
     ['scTitle', 'scSelect', 'scPause', 'scClear', 'scEnding', 'scHelp'].forEach(id => $(id).classList.toggle('on', id === name));
@@ -1338,7 +1518,7 @@ const HUD = {
   },
   canFold(on) { document.body.classList.toggle('canfold', on); },
   toast(text) {
-    const t = $('toast'); t.textContent = text; t.classList.add('on');
+    const t = $('toast'); t.textContent = text; wrapPhrases(t); t.classList.add('on');
     clearTimeout(HUD._tt); HUD._tt = setTimeout(() => t.classList.remove('on'), 1500);
   },
 };
@@ -1351,7 +1531,7 @@ function loadSave() {
 function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) {} }
 let save = loadSave();
 
-const WORLD_NAME = { 1: 'ワールド1　草原の紙', 2: 'ワールド2　夕やけの紙', 3: 'ワールド3　夜の紙', 4: '最終ステージ', 5: 'ひみつ' };
+const WORLD_NAME = { 1: 'ワールド1', 2: 'ワールド2', 3: 'ワールド3', 4: '最終・ひみつ', 5: '最終・ひみつ' };
 const ABILITY_TEXT = {
   yfold: '新しい能力「横の折り目」を手に入れた！<br>高い足場を折り下ろしたり、崖を低くできる。',
   double: '新しい能力「二重折り」を手に入れた！<br>2か所を同時に折れる。（U / Shift で戻す）',
@@ -1370,7 +1550,8 @@ function unlocked(lv) {
 let stageIdx = 0, level = LEVELS[0], world = new World(level);
 let hero = newHero(level);
 let state = 'title';          // title | select | play | pause | clear | ending
-let anim = null;              // { i, fold, t, carried, x0, x1 }
+let anims = [];              // 動いている折り（同時に 2 つ：前の折りを戻しながら次を折る）
+                              // { i, fold, t, carried, x0, y0, x1, y1 }
 let shake = null;             // { i, t }
 let time = 0, clock = 0, foldCount = 0, squash = 0, candidate = -1;
 let got = [], flagsHit = [], cp = null, deadT = 0, deaths = 0, foldStack = [];
@@ -1378,7 +1559,7 @@ let got = [], flagsHit = [], cp = null, deadT = 0, deaths = 0, foldStack = [];
 GAME3D.init($('view'));
 
 function resetRun() {
-  world.mask = 0; anim = null; shake = null; deadT = 0; foldStack = [];
+  world.mask = 0; anims = []; shake = null; deadT = 0; foldStack = [];
   hero = newHero(level);
   got = world.shards.map(() => false);
   flagsHit = world.flags.map(() => false);
@@ -1393,7 +1574,7 @@ function loadStage(i) {
   document.body.classList.toggle('double', world.maxFolds > 1);
 }
 function enterPlay() { state = 'play'; HUD.show(null); HUD.playing(true); }
-function startStage(i) { loadStage(i); enterPlay(); SND.bgm(level.theme === 'gold' ? 'gold' : level.theme); }
+function startStage(i) { loadStage(i); enterPlay(); SND.bgm(level.theme); }
 
 // あそびかた（はじめて遊ぶときは、ステージの前に見せる）
 let helpFrom = 'scTitle', pendingStage = -1, hintFold = -1, hintT = 0, hintedDeaths = false;
@@ -1408,7 +1589,7 @@ function respawn() {   // 落ちる・トゲ → 最後に取った旗から。�
   if (deaths >= 3 && !hintedDeaths) { hintedDeaths = true; setTimeout(() => HUD.toast('ポーズ（Esc）の「ヒント」で、次の折り目が光るよ'), 1700); }
   world.mask = cp ? cp.mask : 0;
   foldStack = cp ? cp.stack.slice() : [];
-  anim = null; shake = null;
+  anims = []; shake = null;
   hero = newHero(level, cp ? { x: cp.x, y: cp.y } : null);
   deadT = 0.35;
   GAME3D.snapCamera(hero.x, hero.y);
@@ -1426,9 +1607,9 @@ onRetry = () => { if (state === 'play' || state === 'pause') { resetRun(); enter
 function showSelect() {
   state = 'select'; HUD.playing(false);
   const box = $('cards'); box.innerHTML = '';
-  const worlds = [1, 2, 3, 4, 5];
-  worlds.forEach(wn => {
-    const list = LEVELS.map((lv, i) => ({ lv, i })).filter(e => e.lv.world === wn);
+  [[1], [2], [3], [4, 5]].forEach(ws => {
+    const wn = ws[0];
+    const list = LEVELS.map((lv, i) => ({ lv, i })).filter(e => ws.includes(e.lv.world));
     if (!list.length) return;
     const row = document.createElement('div'); row.className = 'wrow';
     const lab = document.createElement('div'); lab.className = 'wlab'; lab.textContent = WORLD_NAME[wn];
@@ -1487,46 +1668,54 @@ const WHY = {
   compat: 'その折りとは同時に折れない', onLayer: '乗っている紙は戻せない', max: 'これ以上は同時に折れない',
 };
 
-function startFold(i) { SND.play('fold'); anim = { i, fold: true, t: 0, carried: false, x0: hero.x, x1: hero.x }; foldCount++; }
+function mkAnim(i, fold, r, carried) {
+  return { i, fold, t: 0, carried: !!carried, x0: hero.x, y0: hero.y, x1: r.x !== undefined ? r.x : r.nx, y1: r.y };
+}
+
+// 次に折りたい折り目 j を、前の折りを自動で戻しながら折る
+function startFold(j, plan) {
+  SND.play('fold');
+  if (plan.unfold >= 0) { anims.push(mkAnim(plan.unfold, false, { nx: hero.x, y: hero.y }, false)); }
+  anims.push(mkAnim(j, true, plan.r, plan.r.carried));
+  foldCount++;
+}
 function startUnfold(i) {
   const r = canUnfold(world, i, hero.x, hero.y);
-  if (r.ok) { SND.play('unfold'); anim = { i, fold: false, t: 0, carried: r.carried, x0: hero.x, x1: r.nx }; return true; }
+  if (r.ok) { SND.play('unfold'); anims.push(mkAnim(i, false, r, r.carried)); return true; }
   SND.play('shake'); shake = { i, t: 0 }; HUD.toast(WHY[r.why] || '紙が重なって戻せない');
   return false;
 }
 
-// F：いちばん近い「折れる」折り目を折る。なければ、いちばん新しく折ったものを戻す。U / Shift：戻す
-function tryFold() {
-  if (anim || !hero.ground) return;
-  let best = -1, bestD = 1e9, blocked = -1, why = '';
+// 折れる候補の中から、いちばん近いものを選ぶ（前の折りの自動切り替えも含む）
+function bestPlan() {
+  let best = null;
   for (let i = 0; i < world.folds.length; i++) {
     if (world.isOn(i)) continue;
-    const r = canFold(world, i, hero.x, hero.y), d = hingeDist(world.folds[i], hero.x, hero.y);
-    if (r.ok) { if (d < bestD) { bestD = d; best = i; } }
-    else if (['overlap', 'onTab', 'compat'].includes(r.why) && blocked < 0) { blocked = i; why = r.why; }
+    const p = planFold(world, i, hero.x, hero.y, foldStack);
+    const d = hingeDist(world.folds[i], hero.x, hero.y);
+    if (p.ok) { if (!best || d < best.d) best = { j: i, d, plan: p }; }
   }
-  if (best >= 0) { startFold(best); return; }
+  return best;
+}
+
+// F：いちばん近い折れる折り目を折る（前の折りは自動で戻す）。なければ、いちばん新しく折ったものを戻す。U / Shift：戻す
+function tryFold() {
+  if (anims.length || !hero.ground) return;
+  const b = bestPlan();
+  if (b) { startFold(b.j, b.plan); return; }
   if (foldStack.length) { startUnfold(foldStack[foldStack.length - 1]); return; }
-  if (blocked >= 0) { shake = { i: blocked, t: 0 }; HUD.toast(WHY[why]); }
 }
 function tryUnfold() {
-  if (anim || !hero.ground || !foldStack.length) return;
+  if (anims.length || !hero.ground || !foldStack.length) return;
   startUnfold(foldStack[foldStack.length - 1]);
 }
 
 function updateCandidate() {
   candidate = -1;
-  if (anim) return;
-  let bestD = 1e9;
-  for (let i = 0; i < world.folds.length; i++) {
-    if (world.isOn(i)) continue;
-    const r = canFold(world, i, hero.x, hero.y);
-    if (r.ok || ['overlap', 'onTab', 'compat'].includes(r.why)) {
-      const d = hingeDist(world.folds[i], hero.x, hero.y);
-      if (d < bestD) { bestD = d; candidate = i; }
-    }
-  }
-  if (candidate < 0 && foldStack.length) candidate = foldStack[foldStack.length - 1];
+  if (anims.length) return;
+  const b = bestPlan();
+  if (b) { candidate = b.j; return; }
+  if (foldStack.length) candidate = foldStack[foldStack.length - 1];
 }
 
 function collectItems() {
@@ -1538,7 +1727,7 @@ function collectItems() {
     if (Math.hypot(c[0] + 0.5 - cx, c[1] + 0.5 - cy) < CFG.item.shardR) { got[i] = true; HUD.toast('小さな欠片をひろった！'); SND.play('shard'); GAME3D.confetti(c[0] + 0.5, c[1] + 0.5, 12, 5); }
   });
   world.flags.forEach((f, i) => {
-    if (flagsHit[i] || !hero.ground || anim) return;
+    if (flagsHit[i] || !hero.ground || anims.length) return;
     if (Math.hypot(f.x - hero.x, f.y + 0.5 - cy) < CFG.item.flagR) {
       flagsHit[i] = true;
       cp = { x: f.x, y: f.y, mask: world.mask, stack: foldStack.slice() };
@@ -1561,11 +1750,13 @@ function clearStage() {
   if (level.big) { save.abilities[level.big] = true; abilityMsg = '<br><br>◆◆◆ ' + ABILITY_TEXT[level.big] + ' ◆◆◆'; }
   writeSave(save);
   $('clearInfo').innerHTML = `${level.id} ${level.name}<br>タイム ${time.toFixed(1)} 秒　／　折った回数 ${foldCount} 回<br>小さな欠片 ${n}/${level.shards.length}　／　やり直し ${deaths} 回${abilityMsg}`;
+  wrapPhrases($('clearInfo'));
   const hasNext = LEVELS.some((lv, i) => i > stageIdx && unlocked(lv) && !lv.needShards);
   $('btnNext').style.display = hasNext && !level.final ? '' : 'none';
   if (level.final) {
     const sum = Object.values(save.stages).reduce((t, s) => t + (s.clear ? s.best : 0), 0);
     $('endInfo').innerHTML = `最終ステージ クリア！<br>小さな欠片 ${totalShards()} / ${LEVELS.reduce((a, l) => a + l.shards.length, 0)}　／　最短タイムの合計 ${sum.toFixed(1)} 秒`;
+    wrapPhrases($('endInfo'));
     HUD.show('scEnding'); state = 'ending';
   } else HUD.show('scClear');
 }
@@ -1573,18 +1764,20 @@ function clearStage() {
 function update(dt) {
   time += dt;
   if (deadT > 0) deadT -= dt;
-  if (anim) {
-    anim.t += dt;
-    if (anim.t >= CFG.fold.dur) {
-      if (anim.fold) { world.mask |= 1 << anim.i; foldStack.push(anim.i); }
-      else { world.mask &= ~(1 << anim.i); foldStack = foldStack.filter(k => k !== anim.i); }
-      if (anim.carried) { hero.x = anim.x1; hero.vx = 0; hero.vy = 0; }
-      anim = null;
+  if (anims.length) {
+    for (const a of anims) a.t += dt;
+    if (anims[0].t >= CFG.fold.dur) {
+      for (const a of anims) {
+        if (a.fold) { world.mask |= 1 << a.i; foldStack.push(a.i); }
+        else { world.mask &= ~(1 << a.i); foldStack = foldStack.filter(k => k !== a.i); }
+        if (a.carried || a.x1 !== a.x0 || a.y1 !== a.y0) { hero.x = a.x1; hero.y = a.y1; hero.vx = 0; hero.vy = 0; }
+      }
+      anims = [];
     }
   } else {
     if (INPUT.unfoldPressed) tryUnfold();
     else if (INPUT.foldPressed) tryFold();
-    if (!anim) {
+    if (!anims.length) {
       stepHero(world, hero, INPUT, dt);
       if (hero.jumped) SND.play('jump');
       if (hero.landed) { squash = Math.max(squash, hero.landed); SND.play('land'); }
@@ -1600,25 +1793,17 @@ function update(dt) {
   squash = Math.max(0, squash - dt * 5);
   updateCandidate();
   // ガイド表示
-  if (anim) HUD.prompt('');
+  if (anims.length) HUD.prompt('');
   else if (candidate >= 0 && !world.isOn(candidate)) {
-    const r = canFold(world, candidate, hero.x, hero.y);
-    HUD.prompt(r.ok ? 'F：折る' : WHY[r.why], !r.ok);
+    const b = bestPlan();
+    HUD.prompt(b && b.plan.unfold >= 0 ? 'F：折る（前の折りは自動で戻る）' : 'F：折る');
   } else if (foldStack.length) {
     const top = foldStack[foldStack.length - 1], r = canUnfold(world, top, hero.x, hero.y);
     HUD.prompt(r.ok ? (r.carried ? 'F：元に戻す（紙ごと運ばれる）' : 'F：元に戻す') : WHY[r.why] || '重なっていて戻せない', !r.ok);
   } else HUD.prompt('');
-  HUD.canFold(!anim && candidate >= 0);
+  HUD.canFold(!anims.length && candidate >= 0);
   HUD.time(time);
   HUD.shards(got.filter(Boolean).length, got.length);
-}
-
-// 足元の地面の高さ（影を落とす位置）
-function groundBelow() {
-  if (state === 'title' || state === 'select') return null;
-  const cx = Math.floor(hero.x);
-  for (let cy = Math.min(world.H - 1, Math.floor(hero.y + 0.01)); cy >= 0; cy--) if (world.solid(cx, cy)) return cy + 1;
-  return null;
 }
 
 let last = performance.now();
@@ -1630,7 +1815,7 @@ function frame(now) {
     while (rest > 1e-6) { const s = Math.min(rest, 1 / 120); update(s); rest -= s; if (state !== 'play') break; }
   }
   if (hintT > 0) { hintT -= dt; if (hintT <= 0) hintFold = -1; }
-  GAME3D.update(dt, { hero, world, anim, shake, candidate, time: clock, squash, got, flagsHit, dead: false, hint: hintFold, groundY: groundBelow() });
+  GAME3D.update(dt, { hero, world, anims, shake, candidate, time: clock, squash, got, flagsHit, dead: false, hint: hintFold, groundY: groundBelow() });
   GAME3D.render();
   requestAnimationFrame(frame);
 }
@@ -1639,6 +1824,15 @@ requestAnimationFrame(frame);
 
 // 検証用に外から見られるようにしておく（遊びには影響しない）
 window.__game = { get world() { return world; }, get hero() { return hero; }, get state() { return state; }, get got() { return got; }, startStage, showSelect, LEVELS, get save() { return save; } };
+
+// 足元の地面の高さ（影を落とす位置）
+function groundBelow() {
+  if (state === 'title' || state === 'select') return null;
+  const cx = Math.floor(hero.x);
+  for (let cy = Math.min(world.H - 1, Math.floor(hero.y + 0.01)); cy >= 0; cy--) if (world.solid(cx, cy)) return cy + 1;
+  return null;
+}
+
 
 </script>
 </body>
