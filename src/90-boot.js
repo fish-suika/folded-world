@@ -272,7 +272,7 @@ function update(dt) {
   if (anims.length) HUD.prompt('');
   else if (candidate >= 0 && !world.isOn(candidate)) {
     const b = bestPlan();
-    HUD.prompt(b && b.plan.unfold >= 0 ? 'F：折る（前の折りは自動で戻る）' : 'F：折る');
+    HUD.prompt(b && b.plan.r.carried ? 'F：乗ったまま折る（紙ごと運ばれる）' : b && b.plan.unfold >= 0 ? 'F：折る（前の折りは自動で戻る）' : 'F：折る');
   } else if (foldStack.length) {
     const top = foldStack[foldStack.length - 1], r = canUnfold(world, top, hero.x, hero.y);
     HUD.prompt(r.ok ? (r.carried ? 'F：元に戻す（紙ごと運ばれる）' : 'F：元に戻す') : WHY[r.why] || '重なっていて戻せない', !r.ok);

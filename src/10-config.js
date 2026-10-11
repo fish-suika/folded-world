@@ -128,6 +128,32 @@ const LB = {
     L.rects.push([x - 2, 12, 2, 1], [x, 10, 2, 1]);
     L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x - 2, x1: x + 2 });
   },
+  // 乗って折る：穴（幅 2w）の手前の半分に、地面から張り出した板。板の上に乗って折ると、板ごとひっくり返って
+  // 向こうの半分にかかり、主人公は向こう側の端へ運ばれる
+  ride(L, w, after) {
+    const x0 = L.cur;
+    L.rects.push([x0, 1, w, 1]);
+    L.folds.push({ f: x0 + w, w, dir: -1, y0: 1, y1: 2, ride: true });
+    L.cur = x0 + 2 * w; LB.run(L, after);
+  },
+  // 乗って折ったあとも、板の上に乗ったまま次の板を折る（二重折り）。間は 3 マス跳ぶ
+  rideChain(L, after) {
+    const x0 = L.cur;
+    L.rects.push([x0, 1, 5, 1]);
+    L.folds.push({ f: x0 + 5, w: 5, dir: -1, y0: 1, y1: 2, ride: true });
+    L.cur = x0 + 18; LB.run(L, after);
+    L.folds.push({ f: x0 + 18, w: 5, dir: 1, y0: 1, y1: 2 });
+  },
+  // 乗って折った板の上で、そのまま階段を折って崖を登る（二重折り）
+  rideStairs(L, after) {
+    const x0 = L.cur;
+    L.rects.push([x0, 1, 6, 1]);
+    L.folds.push({ f: x0 + 6, w: 6, dir: -1, y0: 1, y1: 2, ride: true });
+    L.cur = x0 + 14; LB.run(L, after);
+    L.rects.push([x0 + 14, 2, 5, 4]);
+    L.rects.push([x0 + 10, 12, 2, 1], [x0 + 12, 10, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x0 + 10, x1: x0 + 14 });
+  },
   goal(L, y = 2) { L.goal = { x: L.cur - 2.5, y }; L.w = L.cur; },
 };
 
@@ -151,21 +177,21 @@ const LEVELS = [];
   LB.plank(L, 7, 9); LB.run(L, 6);
   done(L);
 
-  // 1-2 紙のうら：裏面にだけある足場
+  // 1-2 紙のうら：裏面にだけある足場。そして「乗って折る」
   L = LB.make('1-2', '紙のうら', '折ると、裏にだけある足場が現れる', 1, 'meadow');
   LB.run(L, 7);
   a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 0);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3); LB.shard(L, L.cur - 10, 5);
   LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
-  LB.plank(L, 8, 10); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.ride(L, 6, 10); LB.shard(L, a + 6, 4); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 6); LB.run(L, 4); LB.flag(L);
-  a = L.cur; LB.backStairsX(L, 10); LB.shard(L, a + 6, 10);
+  a = L.cur; LB.backStairsX(L, 10);
   LB.run(L, 4);
   L.goal = { x: a + 8.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 1-3 折り重ねる：裏面のアーチと、これまでの総まとめ（ワールド1の最後：大きな欠片＝横の折り目）
+  // 1-3 折り重ねる：裏面のアーチと総まとめ。最後は「乗って折って」ゴールへ（ワールド1の最後：大きな欠片＝横の折り目）
   L = LB.make('1-3', '折り重ねる', '橋・板・階段を、順番に折っていく', 1, 'meadow', { big: 'yfold' });
   LB.run(L, 7);
   a = L.cur; LB.backArch(L, 10); LB.shard(L, a + 3, 7);
@@ -177,8 +203,8 @@ const LEVELS = [];
   LB.plank(L, 8, 10); LB.run(L, 2);
   LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 8); LB.run(L, 4); LB.flag(L);
-  LB.plankBackHigh(L, 8, 10); LB.run(L, 4);
-  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4);
+  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
   done(L);
 
   // 2-1 たかさを折る：横の折り目
@@ -194,21 +220,22 @@ const LEVELS = [];
   L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 2-2 がけと穴：縦と横の折りを、順番に
+  // 2-2 がけと穴：縦と横の折りを、順番に。乗って折る板も
   L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset');
   LB.run(L, 6);
   LB.plank(L, 8, 10); LB.run(L, 2);
-  a = L.cur; LB.cliffY(L, 3, 9); LB.run(L, 3); LB.flag(L);
+  LB.cliffY(L, 3, 9); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3);
   LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
   LB.cliffStep(L); LB.run(L, 3);
   LB.cliffY(L, 4, 7); LB.run(L, 3); LB.flag(L);
-  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 5); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.ride(L, 6, 10); LB.shard(L, a + 6, 4); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 6); LB.run(L, 3); LB.flag(L);
   a = L.cur; LB.stairsY(L, 2, 12, 7); LB.shard(L, a + 8, 10);
   L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）
+  // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）。乗って折ってゴールへ
   L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', { big: 'double' });
   LB.run(L, 6);
   a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4); LB.run(L, 2); LB.flag(L);
@@ -221,29 +248,30 @@ const LEVELS = [];
   L.spikes.push([L.towerX + 9, 8, 2]);
   L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
   LB.shard(L, L.towerX + 3, 8); LB.shard(L, L.towerX + 22, 12);
-  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
-  LEVELS.push(L);
+  LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
+  done(L);
 
-  // 3-1 ふたつ同時：二重折り
-  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', { maxFolds: 2 });
+  // 3-1 ふたつ同時：二重折り。乗ったまま次を折る
+  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。乗ったまま、次を折る', 3, 'night', { maxFolds: 2 });
   LB.run(L, 7);
   a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 3, 4); LB.shard(L, a + 9, 4);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3);
   LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
-  LB.doubleBridge(L, 14, 16); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.rideChain(L, 10); LB.shard(L, a + 10, 4); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 6); LB.run(L, 4);
   LB.shard(L, L.cur - 6, 4);
   done(L);
 
-  // 3-2 橋と階段：板の上で階段を折る
-  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', { maxFolds: 2 });
+  // 3-2 橋と階段：板の上で階段を折る。乗って折った板の上で階段を折る
+  L = LB.make('3-2', '橋と階段', '板や階段を、乗ったまま折る', 3, 'night', { maxFolds: 2 });
   LB.run(L, 7);
   a = L.cur; LB.bridgeStairs(L, 14); LB.shard(L, a + 1, 4); LB.shard(L, a + 6, 7);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3);
   LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
-  LB.bridgeStairs(L, 14); LB.run(L, 4); LB.flag(L);
+  LB.rideStairs(L, 12); LB.run(L, 4); LB.flag(L);
   LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
   LB.cliffY(L, 4, 7); LB.run(L, 5);
   done(L);
@@ -254,17 +282,15 @@ const LEVELS = [];
   a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
-  LB.bridgeStairs(L, 14); LB.run(L, 3);
-  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.rideChain(L, 10); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
   LB.cliffStep(L); LB.run(L, 3);
   LB.plate(L, 7); LB.run(L, 4); LB.flag(L);
-  LB.pit(L, 8); b = L.cur; LB.run(L, 22);
-  L.folds.push({ f: b, w: 7, dir: 1, y0: 1, y1: 2 });
-  L.rects.push([b - 2, 12, 2, 1], [b, 10, 2, 1], [b + 2, 8, 2, 1], [b + 4, 7, 10, 1]);
-  L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: b - 2, x1: b + 4 });
-  LB.shard(L, b + 7, 10);
-  L.goal = { x: b + 11.5, y: 8 }; L.w = L.cur;
-  LEVELS.push(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.rideStairs(L, 12); LB.shard(L, a + 11, 7); LB.run(L, 4);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
+  done(L);
 
   // 4 おりたたまれた世界（最終ステージ）
   L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', { maxFolds: 2, final: true });
@@ -274,24 +300,27 @@ const LEVELS = [];
   LB.cliffY(L, 4, 8); LB.run(L, 3);
   LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
   LB.hop(L, 5, 3); LB.run(L, 3);
-  LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
+  LB.rideChain(L, 10); LB.run(L, 3); LB.flag(L);
+  LB.cliffStep(L); LB.run(L, 3);
   LB.bridgeStairs(L, 14); LB.run(L, 3); LB.flag(L);
   LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
   LB.backArch(L, 10); LB.run(L, 3); LB.flag(L);
+  LB.rideStairs(L, 12); LB.run(L, 3);
   LB.plate(L, 8); LB.run(L, 3);
   LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
   LB.stairsTower(L);
   L.spikes.push([L.towerX + 9, 8, 2]);
   L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
   LB.shard(L, L.towerX + 22, 12);
-  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
-  LEVELS.push(L);
+  LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
+  done(L);
 
   // H ひみつの紙（小さな欠片を 20 個集めると開く）
   L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'secret', { maxFolds: 2, needShards: 20 });
   LB.run(L, 6);
-  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
-  LB.run(L, 2); LB.flag(L);
+  a = L.cur; LB.rideChain(L, 10); LB.shard(L, a + 10, 4);
+  LB.run(L, 3); LB.flag(L);
   LB.plate(L, 8); LB.run(L, 3);
   LB.hop(L, 5, 3); LB.shard(L, L.cur - 8, 4); LB.run(L, 3); LB.flag(L);
   LB.cliffY(L, 3, 9); LB.run(L, 3);

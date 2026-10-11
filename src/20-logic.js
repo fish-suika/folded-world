@@ -18,7 +18,7 @@ class World {
         return { axis: 'y', f: f.f, dir: f.dir, x0: f.x0, x1: f.x1, y0, y1: y0 + f.h, back };
       }
       const x0 = f.dir > 0 ? f.f : f.f - f.w;   // 縦の折り目（左右に折る）
-      return { axis: 'x', f: f.f, dir: f.dir, x0, x1: x0 + f.w, y0: f.y0, y1: f.y1, back };
+      return { axis: 'x', f: f.f, dir: f.dir, x0, x1: x0 + f.w, y0: f.y0, y1: f.y1, back, ride: !!f.ride };
     });
     this.spikes = [];
     for (const [x, y, w] of (level.spikes || [])) for (let i = 0; i < w; i++) this.spikes.push({ cx: x + i, cy: y, back: -1 });
@@ -161,17 +161,18 @@ function canFold(w, i, x, y) {
   if (w.isOn(i)) return { ok: false, why: 'active' };
   if (popcount(w.mask) >= w.maxFolds) return { ok: false, why: 'max' };
   for (let j = 0; j < w.folds.length; j++) if (w.isOn(j) && !compatible(w, i, j)) return { ok: false, why: 'compat' };
+  const [x0, x1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  let onTab = false;
+  for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
   if (fd.axis === 'x') {
-    if (fd.dir > 0 ? x >= fd.f : x <= fd.f) return { ok: false, why: 'side' };   // 主人公は耳の反対側にいる
+    // 主人公は耳の反対側にいる。ただし「乗って折る」耳（ride）は、耳の上に乗って折る
+    if (!(fd.ride && onTab) && (fd.dir > 0 ? x >= fd.f : x <= fd.f)) return { ok: false, why: 'side' };
     if (Math.abs(x - fd.f) > CFG.fold.near || y < fd.y0 - 5 || y > fd.y1 + 6) return { ok: false, why: 'far' };
   } else {
     if (fd.dir > 0 ? y >= fd.f : y < fd.f) return { ok: false, why: 'side' };
     if (Math.abs(y - fd.f) > CFG.fold.near || x < fd.x0 - 4 || x > fd.x1 + 4) return { ok: false, why: 'far' };
   }
-  const [x0, x1] = heroCells(x, y);
-  const row = Math.floor(y - 0.05);
-  let onTab = false;
-  for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
   const carried = onTab && fd.axis === 'x';
   const nx = carried ? 2 * fd.f - x : x;
   const res = resolveFit(w, nx, y, w.mask | (1 << i));

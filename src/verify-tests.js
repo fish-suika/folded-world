@@ -121,6 +121,20 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   const w1 = new World(Object.assign({}, L, { maxFolds: 1 }));
   w1.mask = 1;
   T('1 か所しか折れない面では、2 つ目は折れない', canFold(w1, 1, 12.5, 2).why === 'max');
+  // 乗って折る
+  L = mk(l => { LB.run(l, 7); LB.ride(l, 6, 8); }, {});
+  w = new World(L);
+  const rd = canFold(w, 0, 7.5, 2);
+  T('板の上に乗って折ると、向こう側の端（x=18.5）へ運ばれる', rd.ok && rd.carried && Math.abs(rd.x - 18.5) < 1e-6, JSON.stringify(rd));
+  T('板に乗らずに手前の地面からは折れない', !canFold(w, 0, 5, 2).ok);
+  T('向こう側（ゴール側）へ着いたら、乗った板は元に戻せる', (() => { w.mask = 1; const u = canUnfold(w, 0, 18.5, 2); return u.ok && u.carried; })());
+  w.mask = 0;
+  // 乗って折った板の上では、前の折りを自動で戻せない（二重折りが必要）
+  L = mk(l => { LB.run(l, 7); LB.rideChain(l, 10); }, { maxFolds: 1 });
+  w = new World(L);
+  w.mask = 1;
+  const pl = planFold(w, 1, 16.5, 2, [0]);
+  T('1 か所しか折れない面では、乗って折った板の上から次の板を折れない', !pl.ok, JSON.stringify(pl));
   T('全 11 ステージ（3×3 + 最終 + ひみつ）', LEVELS.length === 11, 'n=' + LEVELS.length);
   T('大きな欠片は 1-3, 2-3, 3-3 のゴールにある', LEVELS.filter(l => l.big).map(l => l.id).join() === '1-3,2-3,3-3');
 })();

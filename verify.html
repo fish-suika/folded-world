@@ -150,6 +150,32 @@ const LB = {
     L.rects.push([x - 2, 12, 2, 1], [x, 10, 2, 1]);
     L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x - 2, x1: x + 2 });
   },
+  // 乗って折る：穴（幅 2w）の手前の半分に、地面から張り出した板。板の上に乗って折ると、板ごとひっくり返って
+  // 向こうの半分にかかり、主人公は向こう側の端へ運ばれる
+  ride(L, w, after) {
+    const x0 = L.cur;
+    L.rects.push([x0, 1, w, 1]);
+    L.folds.push({ f: x0 + w, w, dir: -1, y0: 1, y1: 2, ride: true });
+    L.cur = x0 + 2 * w; LB.run(L, after);
+  },
+  // 乗って折ったあとも、板の上に乗ったまま次の板を折る（二重折り）。間は 3 マス跳ぶ
+  rideChain(L, after) {
+    const x0 = L.cur;
+    L.rects.push([x0, 1, 5, 1]);
+    L.folds.push({ f: x0 + 5, w: 5, dir: -1, y0: 1, y1: 2, ride: true });
+    L.cur = x0 + 18; LB.run(L, after);
+    L.folds.push({ f: x0 + 18, w: 5, dir: 1, y0: 1, y1: 2 });
+  },
+  // 乗って折った板の上で、そのまま階段を折って崖を登る（二重折り）
+  rideStairs(L, after) {
+    const x0 = L.cur;
+    L.rects.push([x0, 1, 6, 1]);
+    L.folds.push({ f: x0 + 6, w: 6, dir: -1, y0: 1, y1: 2, ride: true });
+    L.cur = x0 + 14; LB.run(L, after);
+    L.rects.push([x0 + 14, 2, 5, 4]);
+    L.rects.push([x0 + 10, 12, 2, 1], [x0 + 12, 10, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x0 + 10, x1: x0 + 14 });
+  },
   goal(L, y = 2) { L.goal = { x: L.cur - 2.5, y }; L.w = L.cur; },
 };
 
@@ -173,21 +199,21 @@ const LEVELS = [];
   LB.plank(L, 7, 9); LB.run(L, 6);
   done(L);
 
-  // 1-2 紙のうら：裏面にだけある足場
+  // 1-2 紙のうら：裏面にだけある足場。そして「乗って折る」
   L = LB.make('1-2', '紙のうら', '折ると、裏にだけある足場が現れる', 1, 'meadow');
   LB.run(L, 7);
   a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 0);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3); LB.shard(L, L.cur - 10, 5);
   LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
-  LB.plank(L, 8, 10); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.ride(L, 6, 10); LB.shard(L, a + 6, 4); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 6); LB.run(L, 4); LB.flag(L);
-  a = L.cur; LB.backStairsX(L, 10); LB.shard(L, a + 6, 10);
+  a = L.cur; LB.backStairsX(L, 10);
   LB.run(L, 4);
   L.goal = { x: a + 8.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 1-3 折り重ねる：裏面のアーチと、これまでの総まとめ（ワールド1の最後：大きな欠片＝横の折り目）
+  // 1-3 折り重ねる：裏面のアーチと総まとめ。最後は「乗って折って」ゴールへ（ワールド1の最後：大きな欠片＝横の折り目）
   L = LB.make('1-3', '折り重ねる', '橋・板・階段を、順番に折っていく', 1, 'meadow', { big: 'yfold' });
   LB.run(L, 7);
   a = L.cur; LB.backArch(L, 10); LB.shard(L, a + 3, 7);
@@ -199,8 +225,8 @@ const LEVELS = [];
   LB.plank(L, 8, 10); LB.run(L, 2);
   LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 8); LB.run(L, 4); LB.flag(L);
-  LB.plankBackHigh(L, 8, 10); LB.run(L, 4);
-  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4);
+  LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
   done(L);
 
   // 2-1 たかさを折る：横の折り目
@@ -216,21 +242,22 @@ const LEVELS = [];
   L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 2-2 がけと穴：縦と横の折りを、順番に
+  // 2-2 がけと穴：縦と横の折りを、順番に。乗って折る板も
   L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset');
   LB.run(L, 6);
   LB.plank(L, 8, 10); LB.run(L, 2);
-  a = L.cur; LB.cliffY(L, 3, 9); LB.run(L, 3); LB.flag(L);
+  LB.cliffY(L, 3, 9); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3);
   LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
   LB.cliffStep(L); LB.run(L, 3);
   LB.cliffY(L, 4, 7); LB.run(L, 3); LB.flag(L);
-  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 5); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.ride(L, 6, 10); LB.shard(L, a + 6, 4); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.plankBackHigh(L, 8, 10); LB.shard(L, a + 4, 3, 6); LB.run(L, 3); LB.flag(L);
   a = L.cur; LB.stairsY(L, 2, 12, 7); LB.shard(L, a + 8, 10);
   L.goal = { x: a + 14.5, y: 8 }; L.w = L.cur;
   LEVELS.push(L);
 
-  // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）
+  // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）。乗って折ってゴールへ
   L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', { big: 'double' });
   LB.run(L, 6);
   a = L.cur; LB.plank(L, 8, 10); LB.shard(L, a + 4, 4); LB.run(L, 2); LB.flag(L);
@@ -243,29 +270,30 @@ const LEVELS = [];
   L.spikes.push([L.towerX + 9, 8, 2]);
   L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
   LB.shard(L, L.towerX + 3, 8); LB.shard(L, L.towerX + 22, 12);
-  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
-  LEVELS.push(L);
+  LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
+  done(L);
 
-  // 3-1 ふたつ同時：二重折り
-  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', { maxFolds: 2 });
+  // 3-1 ふたつ同時：二重折り。乗ったまま次を折る
+  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。乗ったまま、次を折る', 3, 'night', { maxFolds: 2 });
   LB.run(L, 7);
   a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 3, 4); LB.shard(L, a + 9, 4);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3);
   LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
-  LB.doubleBridge(L, 14, 16); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.rideChain(L, 10); LB.shard(L, a + 10, 4); LB.run(L, 3); LB.flag(L);
   LB.plate(L, 6); LB.run(L, 4);
   LB.shard(L, L.cur - 6, 4);
   done(L);
 
-  // 3-2 橋と階段：板の上で階段を折る
-  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', { maxFolds: 2 });
+  // 3-2 橋と階段：板の上で階段を折る。乗って折った板の上で階段を折る
+  L = LB.make('3-2', '橋と階段', '板や階段を、乗ったまま折る', 3, 'night', { maxFolds: 2 });
   LB.run(L, 7);
   a = L.cur; LB.bridgeStairs(L, 14); LB.shard(L, a + 1, 4); LB.shard(L, a + 6, 7);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 7); LB.run(L, 3);
   LB.hop(L, 3, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
-  LB.bridgeStairs(L, 14); LB.run(L, 4); LB.flag(L);
+  LB.rideStairs(L, 12); LB.run(L, 4); LB.flag(L);
   LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
   LB.cliffY(L, 4, 7); LB.run(L, 5);
   done(L);
@@ -276,17 +304,15 @@ const LEVELS = [];
   a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
   LB.run(L, 2); LB.flag(L);
   LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
-  LB.bridgeStairs(L, 14); LB.run(L, 3);
-  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
+  LB.rideChain(L, 10); LB.run(L, 3);
+  LB.hop(L, 4, 3); LB.run(L, 3); LB.flag(L);
   LB.cliffStep(L); LB.run(L, 3);
   LB.plate(L, 7); LB.run(L, 4); LB.flag(L);
-  LB.pit(L, 8); b = L.cur; LB.run(L, 22);
-  L.folds.push({ f: b, w: 7, dir: 1, y0: 1, y1: 2 });
-  L.rects.push([b - 2, 12, 2, 1], [b, 10, 2, 1], [b + 2, 8, 2, 1], [b + 4, 7, 10, 1]);
-  L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: b - 2, x1: b + 4 });
-  LB.shard(L, b + 7, 10);
-  L.goal = { x: b + 11.5, y: 8 }; L.w = L.cur;
-  LEVELS.push(L);
+  LB.bridgeStairs(L, 14); LB.run(L, 3); LB.flag(L);
+  a = L.cur; LB.rideStairs(L, 12); LB.shard(L, a + 11, 7); LB.run(L, 4);
+  LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
+  done(L);
 
   // 4 おりたたまれた世界（最終ステージ）
   L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', { maxFolds: 2, final: true });
@@ -296,24 +322,27 @@ const LEVELS = [];
   LB.cliffY(L, 4, 8); LB.run(L, 3);
   LB.plate(L, 8); LB.run(L, 3); LB.flag(L);
   LB.hop(L, 5, 3); LB.run(L, 3);
-  LB.cliffStep(L); LB.run(L, 3); LB.flag(L);
+  LB.rideChain(L, 10); LB.run(L, 3); LB.flag(L);
+  LB.cliffStep(L); LB.run(L, 3);
   LB.bridgeStairs(L, 14); LB.run(L, 3); LB.flag(L);
   LB.plankBackHigh(L, 8, 10); LB.run(L, 3);
   LB.backArch(L, 10); LB.run(L, 3); LB.flag(L);
+  LB.rideStairs(L, 12); LB.run(L, 3);
   LB.plate(L, 8); LB.run(L, 3);
   LB.hop(L, 4, 3); LB.shard(L, L.cur - 5, 4); LB.run(L, 3); LB.flag(L);
   LB.stairsTower(L);
   L.spikes.push([L.towerX + 9, 8, 2]);
   L.flags.push({ x: L.towerX + 7.5, y: 8 }, { x: L.towerX + 19.5, y: 10 });
   LB.shard(L, L.towerX + 22, 12);
-  L.goal = { x: L.towerX + 25.5, y: 10 }; L.w = L.cur;
-  LEVELS.push(L);
+  LB.run(L, 4); LB.flag(L);
+  LB.ride(L, 7, 8);
+  done(L);
 
   // H ひみつの紙（小さな欠片を 20 個集めると開く）
   L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'secret', { maxFolds: 2, needShards: 20 });
   LB.run(L, 6);
-  a = L.cur; LB.doubleBridge(L, 12, 14); LB.shard(L, a + 6, 4);
-  LB.run(L, 2); LB.flag(L);
+  a = L.cur; LB.rideChain(L, 10); LB.shard(L, a + 10, 4);
+  LB.run(L, 3); LB.flag(L);
   LB.plate(L, 8); LB.run(L, 3);
   LB.hop(L, 5, 3); LB.shard(L, L.cur - 8, 4); LB.run(L, 3); LB.flag(L);
   LB.cliffY(L, 3, 9); LB.run(L, 3);
@@ -342,7 +371,7 @@ class World {
         return { axis: 'y', f: f.f, dir: f.dir, x0: f.x0, x1: f.x1, y0, y1: y0 + f.h, back };
       }
       const x0 = f.dir > 0 ? f.f : f.f - f.w;   // 縦の折り目（左右に折る）
-      return { axis: 'x', f: f.f, dir: f.dir, x0, x1: x0 + f.w, y0: f.y0, y1: f.y1, back };
+      return { axis: 'x', f: f.f, dir: f.dir, x0, x1: x0 + f.w, y0: f.y0, y1: f.y1, back, ride: !!f.ride };
     });
     this.spikes = [];
     for (const [x, y, w] of (level.spikes || [])) for (let i = 0; i < w; i++) this.spikes.push({ cx: x + i, cy: y, back: -1 });
@@ -485,17 +514,18 @@ function canFold(w, i, x, y) {
   if (w.isOn(i)) return { ok: false, why: 'active' };
   if (popcount(w.mask) >= w.maxFolds) return { ok: false, why: 'max' };
   for (let j = 0; j < w.folds.length; j++) if (w.isOn(j) && !compatible(w, i, j)) return { ok: false, why: 'compat' };
+  const [x0, x1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  let onTab = false;
+  for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
   if (fd.axis === 'x') {
-    if (fd.dir > 0 ? x >= fd.f : x <= fd.f) return { ok: false, why: 'side' };   // 主人公は耳の反対側にいる
+    // 主人公は耳の反対側にいる。ただし「乗って折る」耳（ride）は、耳の上に乗って折る
+    if (!(fd.ride && onTab) && (fd.dir > 0 ? x >= fd.f : x <= fd.f)) return { ok: false, why: 'side' };
     if (Math.abs(x - fd.f) > CFG.fold.near || y < fd.y0 - 5 || y > fd.y1 + 6) return { ok: false, why: 'far' };
   } else {
     if (fd.dir > 0 ? y >= fd.f : y < fd.f) return { ok: false, why: 'side' };
     if (Math.abs(y - fd.f) > CFG.fold.near || x < fd.x0 - 4 || x > fd.x1 + 4) return { ok: false, why: 'far' };
   }
-  const [x0, x1] = heroCells(x, y);
-  const row = Math.floor(y - 0.05);
-  let onTab = false;
-  for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
   const carried = onTab && fd.axis === 'x';
   const nx = carried ? 2 * fd.f - x : x;
   const res = resolveFit(w, nx, y, w.mask | (1 << i));
@@ -814,6 +844,20 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   const w1 = new World(Object.assign({}, L, { maxFolds: 1 }));
   w1.mask = 1;
   T('1 か所しか折れない面では、2 つ目は折れない', canFold(w1, 1, 12.5, 2).why === 'max');
+  // 乗って折る
+  L = mk(l => { LB.run(l, 7); LB.ride(l, 6, 8); }, {});
+  w = new World(L);
+  const rd = canFold(w, 0, 7.5, 2);
+  T('板の上に乗って折ると、向こう側の端（x=18.5）へ運ばれる', rd.ok && rd.carried && Math.abs(rd.x - 18.5) < 1e-6, JSON.stringify(rd));
+  T('板に乗らずに手前の地面からは折れない', !canFold(w, 0, 5, 2).ok);
+  T('向こう側（ゴール側）へ着いたら、乗った板は元に戻せる', (() => { w.mask = 1; const u = canUnfold(w, 0, 18.5, 2); return u.ok && u.carried; })());
+  w.mask = 0;
+  // 乗って折った板の上では、前の折りを自動で戻せない（二重折りが必要）
+  L = mk(l => { LB.run(l, 7); LB.rideChain(l, 10); }, { maxFolds: 1 });
+  w = new World(L);
+  w.mask = 1;
+  const pl = planFold(w, 1, 16.5, 2, [0]);
+  T('1 か所しか折れない面では、乗って折った板の上から次の板を折れない', !pl.ok, JSON.stringify(pl));
   T('全 11 ステージ（3×3 + 最終 + ひみつ）', LEVELS.length === 11, 'n=' + LEVELS.length);
   T('大きな欠片は 1-3, 2-3, 3-3 のゴールにある', LEVELS.filter(l => l.big).map(l => l.id).join() === '1-3,2-3,3-3');
 })();
