@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>折りたたまれた世界（仮）</title>
+<style>
+  :root{--ink:#4a3b2e;--paper:#fbf4e2;--gold:#ffb938;--coral:#ff7a5c;--leaf:#5fb86a;--jp:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Meiryo","Noto Sans JP",sans-serif}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1d1a26;color:var(--ink);font-family:var(--jp);
+    touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+  html,body{height:100vh;height:100dvh}
+  button{font-family:var(--jp);touch-action:manipulation;cursor:pointer}
+
+  /* ---- 16:9 の枠。画面に収まる最大の 16:9 を中央に置く ---- */
+  #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);aspect-ratio:16/9;
+    width:min(100vw,calc(100vh*16/9));overflow:hidden;container-type:size;
+    background:linear-gradient(#bfe6ff 0%,#e9f6ff 55%,#fff3d6 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 0 60px rgba(0,0,0,.6)}
+  @supports (height:100dvh){#stage{width:min(100vw,calc(100dvh*16/9))}}
+  #view{position:absolute;inset:0}
+  #view canvas{display:block;width:100%;height:100%}
+
+  /* ---- HUD ---- */
+  #hud{position:absolute;inset:0;pointer-events:none;display:none}
+  body.playing #hud{display:block}
+  .tag{position:absolute;top:2.2cqw;font-size:2cqw;font-weight:700;letter-spacing:.08em;padding:.5cqw 1.6cqw;border-radius:2cqw;
+    background:rgba(251,244,226,.88);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
+  #tagStage{left:2.2cqw}
+  #tagTime{right:2.2cqw;font-variant-numeric:tabular-nums}
+  #prompt{position:absolute;left:50%;top:13cqh;transform:translateX(-50%);font-size:2.4cqw;font-weight:800;letter-spacing:.1em;
+    padding:.8cqw 2.4cqw;border-radius:3cqw;background:var(--gold);color:#4a2d00;box-shadow:0 .4cqw 0 #c47f00;display:none;white-space:nowrap}
+  #prompt.warn{background:#ffe1d8;color:#8a2b12;box-shadow:0 .4cqw 0 #d98c78}
+  #toast{position:absolute;left:50%;top:24cqh;transform:translateX(-50%);font-size:2.2cqw;font-weight:700;padding:.7cqw 2.2cqw;border-radius:3cqw;
+    background:rgba(74,59,46,.88);color:#fff6e0;opacity:0;transition:opacity .25s}
+  #toast.on{opacity:1}
+
+  /* ---- 画面（タイトル・ポーズ・クリア） ---- */
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2.2cqw;
+    background:rgba(255,246,224,.9);z-index:5}
+  .screen.on{display:flex}
+  .screen h1{font-size:6.4cqw;letter-spacing:.12em;color:var(--ink);text-shadow:.35cqw .35cqw 0 #ffd36b}
+  .screen h2{font-size:5cqw;letter-spacing:.14em;text-shadow:.3cqw .3cqw 0 #ffd36b}
+  .screen p{font-size:2.1cqw;line-height:1.9;letter-spacing:.06em}
+  .screen small{font-size:1.7cqw;opacity:.75;letter-spacing:.05em;line-height:1.8}
+  .btn{font-size:2.6cqw;font-weight:800;letter-spacing:.2em;padding:1cqw 5cqw;border:0;border-radius:4cqw;background:var(--coral);color:#fff;
+    box-shadow:0 .6cqw 0 #c4482e;transition:transform .08s}
+  .btn:active{transform:translateY(.4cqw);box-shadow:0 .2cqw 0 #c4482e}
+  .btn.sub{background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;font-size:2cqw;padding:.8cqw 3.4cqw}
+  .row{display:flex;gap:2cqw;align-items:center}
+  kbd{display:inline-block;min-width:3cqw;padding:0 .8cqw;border-radius:.8cqw;background:#fff;box-shadow:0 .3cqw 0 #cfc3a8;font-family:inherit;font-weight:700}
+
+  /* ---- タッチ操作（スマホ） ---- */
+  #touch{position:absolute;inset:0;display:none;pointer-events:none}
+  body.touch.playing #touch{display:block}
+  .tb{position:absolute;bottom:4cqh;width:12cqh;height:12cqh;border-radius:50%;border:0;pointer-events:auto;
+    background:rgba(251,244,226,.72);color:var(--ink);font-size:3.4cqh;font-weight:800;box-shadow:0 .8cqh 0 rgba(74,59,46,.25)}
+  .tb.down{background:var(--gold)}
+  #bL{left:3cqw}#bR{left:calc(3cqw + 14.5cqh)}
+  #bJ{right:3cqw}#bF{right:calc(3cqw + 14.5cqh);font-size:3cqh}
+  body.canfold #bF{background:var(--gold);animation:pulse .8s ease-in-out infinite}
+  @keyframes pulse{50%{transform:scale(1.1)}}
+
+  /* ---- スマホが縦向きのときの案内 ---- */
+  #rotate{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;
+    text-align:center;background:#2a2234;color:#fbf4e2}
+  #rotate .phone{width:46px;height:80px;border:4px solid #fbf4e2;border-radius:9px;position:relative;animation:turn 2.4s ease-in-out infinite}
+  #rotate .phone::after{content:"";position:absolute;left:50%;bottom:5px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:#fbf4e2}
+  @keyframes turn{0%,25%{transform:rotate(0)}55%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+  #rotate p{font-size:20px;letter-spacing:.1em;line-height:1.8}
+  #rotate small{display:block;font-size:14px;opacity:.75;letter-spacing:.05em}
+  @media (orientation: portrait) and (pointer: coarse){#rotate{display:flex}}
+</style>
+</head>
+<body>
+<div id="rotate"><div class="phone"></div><p>横画面にしてください<small>スマホを横向きにすると遊べます</small></p></div>
+<div id="stage">
+  <div id="view"></div>
+  <div id="hud">
+    <div class="tag" id="tagStage">おためしの紙</div>
+    <div class="tag" id="tagTime">0.0 s</div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+  </div>
+  <div id="touch">
+    <button class="tb" id="bL">◀</button><button class="tb" id="bR">▶</button>
+    <button class="tb" id="bF">折る</button><button class="tb" id="bJ">跳ぶ</button>
+  </div>
+
+  <div class="screen on" id="scTitle">
+    <h1>折りたたまれた世界</h1>
+    <p>紙の世界を折って、道を作ろう。<br>折り目（点線）の近くで「折る」と、紙がパタンと反対側にかさなる。</p>
+    <div class="row"><button class="btn" id="btnStart">はじめる</button></div>
+    <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
+  </div>
+  <div class="screen" id="scPause">
+    <h2>ポーズ</h2>
+    <div class="row"><button class="btn" id="btnResume">つづける</button><button class="btn sub" id="btnRetry">やり直す</button></div>
+  </div>
+  <div class="screen" id="scClear">
+    <h2>クリア！</h2>
+    <p id="clearInfo"></p>
+    <div class="row"><button class="btn" id="btnAgain">もういちど</button></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>

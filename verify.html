@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>検証 — 折りたたまれた世界</title>
+<style>
+  body{font-family:"Yu Gothic UI",system-ui,sans-serif;background:#1c1c1e;color:#eee;padding:24px;line-height:1.7}
+  h1{font-size:18px;margin-bottom:16px}
+  .r{padding:4px 0;border-bottom:1px solid #333}
+  .ok::before{content:"PASS ";color:#6bd07a;font-weight:bold}
+  .ng::before{content:"FAIL ";color:#ff6b6b;font-weight:bold}
+  .ng{color:#ffb0b0}
+  .why{color:#ff8f8f;padding-left:3em;font-size:13px}
+  #sum{margin-top:18px;font-size:16px;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>折りたたまれた世界 — 検証</h1>
+<div id="out"></div>
+<div id="sum"></div>
+<script>
+"use strict";
+"use strict";
+// ===== 調整用の数値（ここだけ触れば遊び心地が変わる） =====
+// 長さの単位は「マス目 1 つ = 1」。x は右、y は上。マス (cx,cy) は [cx,cx+1]×[cy,cy+1]。
+const CFG = {
+  hero: {
+    hw: 0.32,        // 体の半分の幅
+    h: 1.5,          // 体の高さ（足元が y）
+    speed: 6.4,      // 走る速さ（マス/秒）
+    accelG: 70,      // 地上の加速
+    accelA: 42,      // 空中の加速（空中制御）
+    frictionG: 80,   // 地上で止まる強さ
+    gravity: 38,
+    jumpV: 14.2,     // ジャンプの初速。最高到達 = jumpV^2/(2g) ≒ 2.65 マス
+    cutV: 0.45,      // ジャンプボタンを離したときの上昇の減衰
+    maxFall: 26,
+    coyote: 0.09,    // 足場を離れても跳べる猶予
+    buffer: 0.12,    // 着地前の先行入力
+    deathY: -6,      // これより下に落ちたらやり直し
+  },
+  fold: {
+    near: 9.5,       // 折り目からこの距離（マス）以内で「折る」が効く
+    dur: 0.62,       // 折るアニメーションの長さ（この間は主人公も止まる）
+    shakeDur: 0.4,   // 折れないときの震え
+  },
+  solver: { stepUp: 2, maxGap: 3 },   // 検証用の「届く」判定（実物のジャンプより少し控えめ）
+  cam: { fov: 36, dist: 21, smooth: 6, minY: 5.2 },
+};
+
+// ===== お試しステージ =====
+// rects: 紙のマス（[x, y, 幅, 高さ]）。folds: 折り目。折り目 f の縦線で、幅 w・縦 y0〜y1 の「折れる耳」を
+// dir=+1 なら右側（[f, f+w)）、-1 なら左側（[f-w, f)）に持ち、主人公がいない側へパタンと折り返す。
+// 耳は折り目を軸に鏡写しの位置（x → 2f-1-x）に来る。
+const LEVEL = {
+  w: 60, h: 14,
+  start: { x: 2.5, y: 2 },
+  goal: { x: 58.5, y: 2 },
+  rects: [
+    [0, 0, 16, 2],    // 地面 A
+    [8, 2, 2, 3],     // 低い壁（耳 T0 の元）
+    [24, 0, 26, 2],   // 地面 B（穴1の向こう）
+    [41, 2, 4, 4],    // 崖（耳 T2 の元）
+    [54, 0, 6, 2],    // 地面 C（穴2の向こう・ゴール）
+  ],
+  folds: [
+    { f: 8,  w: 2, dir: 1, y0: 2, y1: 3 },   // T0 壁の足元を折って小さな段にする
+    { f: 24, w: 6, dir: 1, y0: 1, y1: 2 },   // T1 向こう岸の地面の表面を板にして穴にかぶせる
+    { f: 41, w: 2, dir: 1, y0: 2, y1: 4 },   // T2 崖の足元を折って階段にする
+    { f: 54, w: 4, dir: 1, y0: 1, y1: 2 },   // T3 もう一度、向こう岸の板を引き寄せる
+  ],
+};
+// ===== 盤面・折りのルール・主人公の物理・到達検証（three.js を使わない部分） =====
+const HERO = CFG.hero;
+
+class World {
+  constructor(level) {
+    this.W = level.w; this.H = level.h;
+    this.base = new Uint8Array(this.W * this.H);
+    for (const [x, y, w, h] of level.rects)
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) this.base[j * this.W + i] = 1;
+    this.folds = level.folds.map(f => {
+      const x0 = f.dir > 0 ? f.f : f.f - f.w;
+      return { f: f.f, w: f.w, dir: f.dir, x0, x1: x0 + f.w, y0: f.y0, y1: f.y1 };
+    });
+    this.active = -1;   // 折っている折り目の番号（折っていなければ -1）。同時に折れるのは1か所だけ
+  }
+  mir(fd, cx) { return 2 * fd.f - 1 - cx; }
+  inSource(fd, cx, cy) { return cx >= fd.x0 && cx < fd.x1 && cy >= fd.y0 && cy < fd.y1; }
+  inTarget(fd, cx, cy) { return this.inSource(fd, this.mir(fd, cx), cy); }
+  baseSolid(cx, cy) { return cx >= 0 && cx < this.W && cy >= 0 && cy < this.H && this.base[cy * this.W + cx] === 1; }
+  // 折り状態を考慮した「そこは固い？」。紙の左右の端は見えない壁、下は落ちる
+  solid(cx, cy, active = this.active) {
+    if (cx < 0 || cx >= this.W) return true;
+    if (cy < 0 || cy >= this.H) return false;
+    let s = this.base[cy * this.W + cx] === 1;
+    if (active >= 0) {
+      const fd = this.folds[active];
+      if (s && this.inSource(fd, cx, cy)) s = false;
+      if (!s && this.inTarget(fd, cx, cy) && this.baseSolid(this.mir(fd, cx), cy)) s = true;
+    }
+    return s;
+  }
+  isLayer(cx, cy) {     // 折り返された耳のマス
+    if (this.active < 0) return false;
+    const fd = this.folds[this.active];
+    return this.inTarget(fd, cx, cy) && this.baseSolid(this.mir(fd, cx), cy);
+  }
+  isBaseKept(cx, cy) {  // 元の位置に残っている紙のマス
+    if (!this.baseSolid(cx, cy)) return false;
+    return !(this.active >= 0 && this.inSource(this.folds[this.active], cx, cy));
+  }
+}
+
+// 主人公の体が重なるマスの範囲 [x0,x1,y0,y1]
+function heroCells(x, y) {
+  return [Math.floor(x - HERO.hw + 1e-6), Math.floor(x + HERO.hw - 1e-6),
+          Math.floor(y + 1e-6), Math.floor(y + HERO.h - 1e-6)];
+}
+
+// 折れる？  { ok, why }  why: far / side / active / overlap / onTab
+function canFold(w, i, x, y) {
+  if (w.active >= 0) return { ok: false, why: 'active' };
+  const fd = w.folds[i];
+  if (fd.dir > 0 ? x >= fd.f : x <= fd.f) return { ok: false, why: 'side' };   // 主人公は耳の反対側にいる
+  if (Math.abs(x - fd.f) > CFG.fold.near || y < fd.y0 - 5 || y > fd.y1 + 6) return { ok: false, why: 'far' };
+  const [x0, x1, y0, y1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  for (let cx = x0; cx <= x1; cx++) {
+    for (let cy = y0; cy <= y1; cy++)
+      if (w.inTarget(fd, cx, cy) && w.baseSolid(w.mir(fd, cx), cy)) return { ok: false, why: 'overlap' };
+    if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) return { ok: false, why: 'onTab' };   // 耳の上に乗っている
+  }
+  return { ok: true };
+}
+
+// 戻せる？  { ok, carried, nx }  耳の上に乗っていたら、耳ごと元の位置へ運ばれる（carried）
+function canUnfold(w, x, y) {
+  if (w.active < 0) return { ok: false, why: 'none' };
+  const fd = w.folds[w.active];
+  const [x0, x1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  let layer = false, kept = false;
+  for (let cx = x0; cx <= x1; cx++) {
+    if (w.isBaseKept(cx, row)) kept = true; else if (w.isLayer(cx, row)) layer = true;
+  }
+  const carried = layer && !kept;
+  const nx = carried ? 2 * fd.f - x : x;
+  const [a0, a1, b0, b1] = heroCells(nx, y);
+  for (let cx = a0; cx <= a1; cx++) for (let cy = b0; cy <= b1; cy++)
+    if (w.solid(cx, cy, -1)) return { ok: false, why: 'overlap' };   // 戻すと紙に埋まる
+  return { ok: true, carried, nx };
+}
+
+// ---- 主人公の物理（足元が y、中心が x） ----
+function newHero(level) {
+  return { x: level.start.x, y: level.start.y, vx: 0, vy: 0, ground: true, face: 1, coyote: 0, buf: 0, jumping: false, jumped: false, landed: 0 };
+}
+
+// inp: { left, right, jumpHeld, jumpPressed }
+function stepHero(w, h, inp, dt) {
+  const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+  const target = dir * HERO.speed;
+  const acc = dir !== 0 ? (h.ground ? HERO.accelG : HERO.accelA) : (h.ground ? HERO.frictionG : HERO.accelA * 0.4);
+  if (h.vx < target) h.vx = Math.min(target, h.vx + acc * dt);
+  else if (h.vx > target) h.vx = Math.max(target, h.vx - acc * dt);
+  if (dir) h.face = dir;
+
+  h.coyote = h.ground ? HERO.coyote : Math.max(0, h.coyote - dt);
+  h.buf = inp.jumpPressed ? HERO.buffer : Math.max(0, h.buf - dt);
+  h.jumped = false; h.landed = 0;
+  if (h.buf > 0 && h.coyote > 0) { h.vy = HERO.jumpV; h.buf = 0; h.coyote = 0; h.ground = false; h.jumped = true; h.jumping = true; }
+  if (h.jumping && !inp.jumpHeld && h.vy > 0) { h.vy *= HERO.cutV; h.jumping = false; }
+  if (h.vy <= 0) h.jumping = false;
+  h.vy = Math.max(-HERO.maxFall, h.vy - HERO.gravity * dt);
+
+  // X
+  let nx = h.x + h.vx * dt;
+  const r = heroCells(h.x, h.y);
+  if (h.vx > 0) {
+    const cx = Math.floor(nx + HERO.hw);
+    for (let cy = r[2]; cy <= r[3]; cy++) if (w.solid(cx, cy)) { nx = cx - HERO.hw - 1e-4; h.vx = 0; break; }
+  } else if (h.vx < 0) {
+    const cx = Math.floor(nx - HERO.hw);
+    for (let cy = r[2]; cy <= r[3]; cy++) if (w.solid(cx, cy)) { nx = cx + 1 + HERO.hw + 1e-4; h.vx = 0; break; }
+  }
+  h.x = nx;
+
+  // Y
+  let ny = h.y + h.vy * dt;
+  const bx0 = Math.floor(h.x - HERO.hw + 1e-6), bx1 = Math.floor(h.x + HERO.hw - 1e-6);
+  const wasGround = h.ground;
+  h.ground = false;
+  if (h.vy <= 0) {
+    const cy = Math.floor(ny);
+    for (let cx = bx0; cx <= bx1; cx++) {
+      if (w.solid(cx, cy) && h.y >= cy + 1 - 1e-4) {
+        if (!wasGround && h.vy < -8) h.landed = Math.min(1, -h.vy / 20);
+        ny = cy + 1; h.vy = 0; h.ground = true; break;
+      }
+    }
+  } else {
+    const cy = Math.floor(ny + HERO.h);
+    for (let cx = bx0; cx <= bx1; cx++) if (w.solid(cx, cy)) { ny = cy - HERO.h - 1e-4; h.vy = 0; h.jumping = false; break; }
+  }
+  h.y = ny;
+}
+
+// ---- 到達検証：「立てるマス」の間を、歩き・ジャンプ・折る・戻すでつないで、ゴールに着けるか ----
+function surfaces(w, cx, active) {
+  const out = [];
+  if (cx < 0 || cx >= w.W) return out;
+  for (let y = 1; y < w.H - 2; y++)
+    if (w.solid(cx, y - 1, active) && !w.solid(cx, y, active) && !w.solid(cx, y + 1, active)) out.push(y);
+  return out;
+}
+
+function solve(w, level, opts = {}) {
+  const allowFold = opts.allowFold !== false;
+  const key = (a, cx, y) => ((a + 1) * 100 + cx) * 100 + y;
+  const sx = Math.floor(level.start.x), sy = level.start.y;
+  const gx = level.goal.x, gy = level.goal.y;
+  const prev = new Map(), q = [[-1, sx, sy]];
+  prev.set(key(-1, sx, sy), null);
+  const save = w.active;
+  let found = null;
+  const push = (from, a, cx, y, label) => {
+    const k = key(a, cx, y);
+    if (prev.has(k)) return;
+    prev.set(k, { from, label });
+    q.push([a, cx, y]);
+  };
+  while (q.length) {
+    const [a, cx, y] = q.shift();
+    if (Math.abs(cx + 0.5 - gx) <= 1.0 && Math.abs(y - gy) <= 1) { found = key(a, cx, y); break; }
+    const from = key(a, cx, y);
+    w.active = a;
+    for (let dx = -CFG.solver.maxGap; dx <= CFG.solver.maxGap; dx++) {
+      if (dx === 0) continue;
+      const nx = cx + dx, step = Math.sign(dx);
+      let blocked = false;
+      for (let k = cx + step; k !== nx; k += step)
+        if (w.solid(k, y + 2, a) || w.solid(k, y + 3, a)) { blocked = true; break; }
+      if (blocked) continue;
+      const ys = surfaces(w, nx, a).filter(v => v <= y + CFG.solver.stepUp);
+      if (!ys.length) continue;
+      if (Math.abs(dx) === 1) { for (const v of ys) if (v >= y - 7) push(from, a, nx, v, 'move'); }
+      else push(from, a, nx, Math.max(...ys), 'jump');
+    }
+    if (allowFold) {
+      const hx = cx + 0.5;
+      if (a < 0) {
+        for (let i = 0; i < w.folds.length; i++)
+          if (canFold(w, i, hx, y).ok) push(from, i, cx, y, 'fold ' + i);
+      } else {
+        const r = canUnfold(w, hx, y);
+        if (r.ok) push(from, -1, Math.floor(r.nx), y, 'unfold ' + a + (r.carried ? ' carried' : ''));
+      }
+    }
+  }
+  w.active = save;
+  if (found === null) return { solvable: false, steps: [] };
+  const steps = [];
+  for (let k = found; prev.get(k); k = prev.get(k).from) steps.unshift(prev.get(k).label);
+  return { solvable: true, steps, folds: steps.filter(s => s.startsWith('fold')).length };
+}
+
+// ===== 検証 =====
+let pass = 0, fail = 0;
+function T(name, ok, why) {
+  const d = document.createElement('div');
+  d.className = 'r ' + (ok ? 'ok' : 'ng');
+  d.textContent = name + (ok || !why ? '' : '  — ' + why);
+  document.getElementById('out').appendChild(d);
+  ok ? pass++ : fail++;
+}
+const W0 = () => new World(LEVEL);
+
+// --- 物理 ---
+(function () {
+  const w = new World({ w: 40, h: 14, start: { x: 2.5, y: 2 }, goal: { x: 0, y: 0 }, folds: [], rects: [[0, 0, 40, 2]] });
+  const sim = (inp, steps, h) => { for (let i = 0; i < steps; i++) { stepHero(w, h, typeof inp === 'function' ? inp(i, h) : inp, 1 / 120); } return h; };
+  // 平地で止まっていられる
+  let h = newHero({ start: { x: 5, y: 2 } }); sim({}, 240, h);
+  T('平地に立っていられる', h.ground && Math.abs(h.y - 2) < 1e-6, 'y=' + h.y);
+  // ジャンプの高さ
+  h = newHero({ start: { x: 5, y: 2 } }); let maxY = 0;
+  sim((i, hh) => { maxY = Math.max(maxY, hh.y); return { jumpPressed: i === 0, jumpHeld: true }; }, 240, h);
+  T('フルジャンプの高さ 2.4〜2.9 マス', maxY - 2 > 2.4 && maxY - 2 < 2.9, (maxY - 2).toFixed(2));
+  // ジャンプの距離（走りながら）
+  h = newHero({ start: { x: 5, y: 2 } }); let air = 0; const x0 = 5;
+  sim((i, hh) => { if (!hh.ground) air++; return { right: true, jumpPressed: i === 0, jumpHeld: true }; }, 120, h);
+  const dist = h.x - x0;
+  T('走りジャンプで 4 マス以上の穴を越えられる', (() => { const hh = newHero({ start: { x: 5, y: 2 } }); let xl = 0, went = false;
+    for (let i = 0; i < 400; i++) { stepHero(w, hh, { right: true, jumpPressed: i === 120, jumpHeld: true }, 1 / 120); if (i > 120 && hh.ground) { xl = hh.x; break; } }
+    return (xl > 0); })(), '');
+  // 3 マスの壁は越えられない
+  const w3 = new World({ w: 40, h: 14, start: { x: 2.5, y: 2 }, goal: { x: 0, y: 0 }, folds: [], rects: [[0, 0, 40, 2], [10, 2, 2, 3]] });
+  h = newHero({ start: { x: 5, y: 2 } });
+  for (let i = 0; i < 1200; i++) {
+    const near = h.x > 8.2;
+    stepHero(w3, h, { right: true, jumpPressed: h.ground && near, jumpHeld: true }, 1 / 120);
+  }
+  T('3 マスの壁は跳び越せない', h.x < 10, 'x=' + h.x.toFixed(2));
+  // 2 マスの段は跳び乗れる
+  const w2 = new World({ w: 40, h: 14, start: { x: 2.5, y: 2 }, goal: { x: 0, y: 0 }, folds: [], rects: [[0, 0, 40, 2], [10, 2, 2, 2]] });
+  h = newHero({ start: { x: 5, y: 2 } }); let peak = 0, landedOn = false;
+  for (let i = 0; i < 600; i++) { stepHero(w2, h, { right: true, jumpPressed: h.ground && h.x > 8.2 && h.x < 9.5, jumpHeld: true }, 1 / 120); if (h.ground && h.x > 10 && h.x < 12 && h.y > 3.99) landedOn = true; }
+  T('2 マスの段には跳び乗れる', landedOn, 'x=' + h.x.toFixed(2) + ' y=' + h.y.toFixed(2));
+})();
+
+// --- 折りのルール ---
+(function () {
+  const w = W0();
+  // T1: 板が穴の上に来る（x 18..23, 行 1）
+  w.active = 1;
+  let ok = true; for (let cx = 18; cx <= 23; cx++) if (!w.solid(cx, 1)) ok = false;
+  T('T1 を折ると板が穴（18〜23）に架かる', ok);
+  T('T1 を折ると元の位置（24〜29 の行1）は空になる', !w.solid(24, 1) && !w.solid(29, 1) && w.solid(24, 0));
+  T('T1 を折っても行0 は残る', w.solid(25, 0));
+  w.active = 2;
+  T('T2 を折ると崖の足元が手前（39〜40, 行2〜3）に来る', w.solid(39, 2) && w.solid(40, 3) && !w.solid(41, 2) && w.solid(41, 4));
+  w.active = 0;
+  T('T0 を折ると段（6〜7, 行2）ができる', w.solid(6, 2) && w.solid(7, 2) && !w.solid(8, 2) && w.solid(8, 3));
+  w.active = -1;
+  // 折れない：主人公が重なる
+  T('T2: 段の位置に立っていると折れない', !canFold(w, 2, 39.6, 2).ok && canFold(w, 2, 39.6, 2).why === 'overlap');
+  T('T2: 離れた位置からは折れる', canFold(w, 2, 36.5, 2).ok);
+  T('T2: 崖の上（耳の反対側ではない）からは折れない', !canFold(w, 2, 43, 6).ok);
+  T('T1: 遠すぎると折れない', !canFold(w, 1, 2.5, 2).ok && canFold(w, 1, 15.3, 2).ok);
+  // 戻す：板の上にいると板ごと向こう岸へ運ばれる
+  w.active = 1;
+  const u = canUnfold(w, 20.5, 2);
+  T('T1: 板の上で戻すと向こう岸（x=27.5）へ運ばれる', u.ok && u.carried && Math.abs(u.nx - 27.5) < 1e-6, JSON.stringify(u));
+  const u2 = canUnfold(w, 12, 2);
+  T('T1: 手前の地面で戻しても動かない', u2.ok && !u2.carried);
+  w.active = 0;
+  T('T0: 段の上からは壁が邪魔で戻せない', !canUnfold(w, 6.5, 3).ok);
+  w.active = -1;
+})();
+
+// --- 到達検証 ---
+(function () {
+  const w = W0();
+  const a = solve(w, LEVEL), b = solve(w, LEVEL, { allowFold: false });
+  T('折らないとゴールに着けない', !b.solvable);
+  T('折ればゴールに着ける', a.solvable, '');
+  if (a.solvable) T('必要な折りは 4 回', a.folds === 4, 'folds=' + a.folds + ' [' + a.steps.join(', ') + ']');
+})();
+
+// --- 実際の物理で通しで遊ぶボット ---
+(function () {
+  const w = W0();
+  let h = newHero(LEVEL), t = 0;
+  const plan = [[0, 3.5], [1, 14.6], [2, 35.5], [3, 46.5]];   // [折り目, この x を超えたら折る]
+  let pi = 0, log = [], foldN = 0, reached = false;
+  for (let i = 0; i < 120 * 90; i++) {
+    t = i / 120;
+    // 折る・戻す（アニメーション中は止まる分を無視して即反映）
+    if (pi < plan.length && h.ground && h.x >= plan[pi][1]) {
+      const want = plan[pi][0];
+      if (w.active >= 0) { const r = canUnfold(w, h.x, h.y); if (r.ok) { w.active = -1; if (r.carried) h.x = r.nx; log.push('unfold@' + h.x.toFixed(1)); } }
+      else { const r = canFold(w, want, h.x, h.y); if (r.ok) { w.active = want; foldN++; pi++; log.push('fold' + want + '@' + h.x.toFixed(1)); } }
+    }
+    // 先を見て跳ぶ
+    const ahead = Math.floor(h.x + 0.7), fr = Math.floor(h.y);
+    let jump = false;
+    if (h.ground) {
+      if (w.solid(ahead, fr) || w.solid(ahead, fr + 1)) jump = true;
+      const sup = Math.floor(h.y - 0.05);
+      if (!w.solid(ahead, sup) && !w.solid(ahead + 1, sup)) jump = true;
+    }
+    const pending = pi < plan.length && h.x >= plan[pi][1];
+    stepHero(w, h, { right: !pending, jumpPressed: jump, jumpHeld: jump || !h.ground }, 1 / 120);
+    if (h.y < CFG.hero.deathY) { log.push('fell@' + h.x.toFixed(1)); break; }
+    if (Math.abs(h.x - LEVEL.goal.x) < 0.9 && Math.abs(h.y - LEVEL.goal.y) < 1.2) { reached = true; break; }
+  }
+  T('ボットが実際の物理でゴールに着く（' + t.toFixed(1) + ' 秒）', reached, log.join(' ') + ' x=' + h.x.toFixed(1) + ' y=' + h.y.toFixed(1));
+  T('ボットは 4 か所すべて折った', foldN === 4, 'foldN=' + foldN);
+})();
+
+document.getElementById('sum').textContent = `${pass} PASS / ${fail} FAIL`;
+document.title = (fail ? 'FAIL ' : 'OK ') + pass + '/' + (pass + fail);
+
+</script>
+</body>
+</html>

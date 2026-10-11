@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>折りたたまれた世界（仮）</title>
+<style>
+  :root{--ink:#4a3b2e;--paper:#fbf4e2;--gold:#ffb938;--coral:#ff7a5c;--leaf:#5fb86a;--jp:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Meiryo","Noto Sans JP",sans-serif}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1d1a26;color:var(--ink);font-family:var(--jp);
+    touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+  html,body{height:100vh;height:100dvh}
+  button{font-family:var(--jp);touch-action:manipulation;cursor:pointer}
+
+  /* ---- 16:9 の枠。画面に収まる最大の 16:9 を中央に置く ---- */
+  #stage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);aspect-ratio:16/9;
+    width:min(100vw,calc(100vh*16/9));overflow:hidden;container-type:size;
+    background:linear-gradient(#bfe6ff 0%,#e9f6ff 55%,#fff3d6 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 0 60px rgba(0,0,0,.6)}
+  @supports (height:100dvh){#stage{width:min(100vw,calc(100dvh*16/9))}}
+  #view{position:absolute;inset:0}
+  #view canvas{display:block;width:100%;height:100%}
+
+  /* ---- HUD ---- */
+  #hud{position:absolute;inset:0;pointer-events:none;display:none}
+  body.playing #hud{display:block}
+  .tag{position:absolute;top:2.2cqw;font-size:2cqw;font-weight:700;letter-spacing:.08em;padding:.5cqw 1.6cqw;border-radius:2cqw;
+    background:rgba(251,244,226,.88);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
+  #tagStage{left:2.2cqw}
+  #tagTime{right:2.2cqw;font-variant-numeric:tabular-nums}
+  #prompt{position:absolute;left:50%;top:13cqh;transform:translateX(-50%);font-size:2.4cqw;font-weight:800;letter-spacing:.1em;
+    padding:.8cqw 2.4cqw;border-radius:3cqw;background:var(--gold);color:#4a2d00;box-shadow:0 .4cqw 0 #c47f00;display:none;white-space:nowrap}
+  #prompt.warn{background:#ffe1d8;color:#8a2b12;box-shadow:0 .4cqw 0 #d98c78}
+  #toast{position:absolute;left:50%;top:24cqh;transform:translateX(-50%);font-size:2.2cqw;font-weight:700;padding:.7cqw 2.2cqw;border-radius:3cqw;
+    background:rgba(74,59,46,.88);color:#fff6e0;opacity:0;transition:opacity .25s}
+  #toast.on{opacity:1}
+
+  /* ---- 画面（タイトル・ポーズ・クリア） ---- */
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2.2cqw;
+    background:rgba(255,246,224,.9);z-index:5}
+  .screen.on{display:flex}
+  .screen h1{font-size:6.4cqw;letter-spacing:.12em;color:var(--ink);text-shadow:.35cqw .35cqw 0 #ffd36b}
+  .screen h2{font-size:5cqw;letter-spacing:.14em;text-shadow:.3cqw .3cqw 0 #ffd36b}
+  .screen p{font-size:2.1cqw;line-height:1.9;letter-spacing:.06em}
+  .screen small{font-size:1.7cqw;opacity:.75;letter-spacing:.05em;line-height:1.8}
+  .btn{font-size:2.6cqw;font-weight:800;letter-spacing:.2em;padding:1cqw 5cqw;border:0;border-radius:4cqw;background:var(--coral);color:#fff;
+    box-shadow:0 .6cqw 0 #c4482e;transition:transform .08s}
+  .btn:active{transform:translateY(.4cqw);box-shadow:0 .2cqw 0 #c4482e}
+  .btn.sub{background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;font-size:2cqw;padding:.8cqw 3.4cqw}
+  .row{display:flex;gap:2cqw;align-items:center}
+  kbd{display:inline-block;min-width:3cqw;padding:0 .8cqw;border-radius:.8cqw;background:#fff;box-shadow:0 .3cqw 0 #cfc3a8;font-family:inherit;font-weight:700}
+
+  /* ---- タッチ操作（スマホ） ---- */
+  #touch{position:absolute;inset:0;display:none;pointer-events:none}
+  body.touch.playing #touch{display:block}
+  .tb{position:absolute;bottom:4cqh;width:12cqh;height:12cqh;border-radius:50%;border:0;pointer-events:auto;
+    background:rgba(251,244,226,.72);color:var(--ink);font-size:3.4cqh;font-weight:800;box-shadow:0 .8cqh 0 rgba(74,59,46,.25)}
+  .tb.down{background:var(--gold)}
+  #bL{left:3cqw}#bR{left:calc(3cqw + 14.5cqh)}
+  #bJ{right:3cqw}#bF{right:calc(3cqw + 14.5cqh);font-size:3cqh}
+  body.canfold #bF{background:var(--gold);animation:pulse .8s ease-in-out infinite}
+  @keyframes pulse{50%{transform:scale(1.1)}}
+
+  /* ---- スマホが縦向きのときの案内 ---- */
+  #rotate{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;
+    text-align:center;background:#2a2234;color:#fbf4e2}
+  #rotate .phone{width:46px;height:80px;border:4px solid #fbf4e2;border-radius:9px;position:relative;animation:turn 2.4s ease-in-out infinite}
+  #rotate .phone::after{content:"";position:absolute;left:50%;bottom:5px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:#fbf4e2}
+  @keyframes turn{0%,25%{transform:rotate(0)}55%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+  #rotate p{font-size:20px;letter-spacing:.1em;line-height:1.8}
+  #rotate small{display:block;font-size:14px;opacity:.75;letter-spacing:.05em}
+  @media (orientation: portrait) and (pointer: coarse){#rotate{display:flex}}
+</style>
+</head>
+<body>
+<div id="rotate"><div class="phone"></div><p>横画面にしてください<small>スマホを横向きにすると遊べます</small></p></div>
+<div id="stage">
+  <div id="view"></div>
+  <div id="hud">
+    <div class="tag" id="tagStage">おためしの紙</div>
+    <div class="tag" id="tagTime">0.0 s</div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+  </div>
+  <div id="touch">
+    <button class="tb" id="bL">◀</button><button class="tb" id="bR">▶</button>
+    <button class="tb" id="bF">折る</button><button class="tb" id="bJ">跳ぶ</button>
+  </div>
+
+  <div class="screen on" id="scTitle">
+    <h1>折りたたまれた世界</h1>
+    <p>紙の世界を折って、道を作ろう。<br>折り目（点線）の近くで「折る」と、紙がパタンと反対側にかさなる。</p>
+    <div class="row"><button class="btn" id="btnStart">はじめる</button></div>
+    <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
+  </div>
+  <div class="screen" id="scPause">
+    <h2>ポーズ</h2>
+    <div class="row"><button class="btn" id="btnResume">つづける</button><button class="btn sub" id="btnRetry">やり直す</button></div>
+  </div>
+  <div class="screen" id="scClear">
+    <h2>クリア！</h2>
+    <p id="clearInfo"></p>
+    <div class="row"><button class="btn" id="btnAgain">もういちど</button></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// ===== 調整用の数値（ここだけ触れば遊び心地が変わる） =====
+// 長さの単位は「マス目 1 つ = 1」。x は右、y は上。マス (cx,cy) は [cx,cx+1]×[cy,cy+1]。
+const CFG = {
+  hero: {
+    hw: 0.32,        // 体の半分の幅
+    h: 1.5,          // 体の高さ（足元が y）
+    speed: 6.4,      // 走る速さ（マス/秒）
+    accelG: 70,      // 地上の加速
+    accelA: 42,      // 空中の加速（空中制御）
+    frictionG: 80,   // 地上で止まる強さ
+    gravity: 38,
+    jumpV: 14.2,     // ジャンプの初速。最高到達 = jumpV^2/(2g) ≒ 2.65 マス
+    cutV: 0.45,      // ジャンプボタンを離したときの上昇の減衰
+    maxFall: 26,
+    coyote: 0.09,    // 足場を離れても跳べる猶予
+    buffer: 0.12,    // 着地前の先行入力
+    deathY: -6,      // これより下に落ちたらやり直し
+  },
+  fold: {
+    near: 9.5,       // 折り目からこの距離（マス）以内で「折る」が効く
+    dur: 0.62,       // 折るアニメーションの長さ（この間は主人公も止まる）
+    shakeDur: 0.4,   // 折れないときの震え
+  },
+  solver: { stepUp: 2, maxGap: 3 },   // 検証用の「届く」判定（実物のジャンプより少し控えめ）
+  cam: { fov: 36, dist: 21, smooth: 6, minY: 5.2 },
+};
+
+// ===== お試しステージ =====
+// rects: 紙のマス（[x, y, 幅, 高さ]）。folds: 折り目。折り目 f の縦線で、幅 w・縦 y0〜y1 の「折れる耳」を
+// dir=+1 なら右側（[f, f+w)）、-1 なら左側（[f-w, f)）に持ち、主人公がいない側へパタンと折り返す。
+// 耳は折り目を軸に鏡写しの位置（x → 2f-1-x）に来る。
+const LEVEL = {
+  w: 60, h: 14,
+  start: { x: 2.5, y: 2 },
+  goal: { x: 58.5, y: 2 },
+  rects: [
+    [0, 0, 16, 2],    // 地面 A
+    [8, 2, 2, 3],     // 低い壁（耳 T0 の元）
+    [24, 0, 26, 2],   // 地面 B（穴1の向こう）
+    [41, 2, 4, 4],    // 崖（耳 T2 の元）
+    [54, 0, 6, 2],    // 地面 C（穴2の向こう・ゴール）
+  ],
+  folds: [
+    { f: 8,  w: 2, dir: 1, y0: 2, y1: 3 },   // T0 壁の足元を折って小さな段にする
+    { f: 24, w: 6, dir: 1, y0: 1, y1: 2 },   // T1 向こう岸の地面の表面を板にして穴にかぶせる
+    { f: 41, w: 2, dir: 1, y0: 2, y1: 4 },   // T2 崖の足元を折って階段にする
+    { f: 54, w: 4, dir: 1, y0: 1, y1: 2 },   // T3 もう一度、向こう岸の板を引き寄せる
+  ],
+};
+// ===== 盤面・折りのルール・主人公の物理・到達検証（three.js を使わない部分） =====
+const HERO = CFG.hero;
+
+class World {
+  constructor(level) {
+    this.W = level.w; this.H = level.h;
+    this.base = new Uint8Array(this.W * this.H);
+    for (const [x, y, w, h] of level.rects)
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) this.base[j * this.W + i] = 1;
+    this.folds = level.folds.map(f => {
+      const x0 = f.dir > 0 ? f.f : f.f - f.w;
+      return { f: f.f, w: f.w, dir: f.dir, x0, x1: x0 + f.w, y0: f.y0, y1: f.y1 };
+    });
+    this.active = -1;   // 折っている折り目の番号（折っていなければ -1）。同時に折れるのは1か所だけ
+  }
+  mir(fd, cx) { return 2 * fd.f - 1 - cx; }
+  inSource(fd, cx, cy) { return cx >= fd.x0 && cx < fd.x1 && cy >= fd.y0 && cy < fd.y1; }
+  inTarget(fd, cx, cy) { return this.inSource(fd, this.mir(fd, cx), cy); }
+  baseSolid(cx, cy) { return cx >= 0 && cx < this.W && cy >= 0 && cy < this.H && this.base[cy * this.W + cx] === 1; }
+  // 折り状態を考慮した「そこは固い？」。紙の左右の端は見えない壁、下は落ちる
+  solid(cx, cy, active = this.active) {
+    if (cx < 0 || cx >= this.W) return true;
+    if (cy < 0 || cy >= this.H) return false;
+    let s = this.base[cy * this.W + cx] === 1;
+    if (active >= 0) {
+      const fd = this.folds[active];
+      if (s && this.inSource(fd, cx, cy)) s = false;
+      if (!s && this.inTarget(fd, cx, cy) && this.baseSolid(this.mir(fd, cx), cy)) s = true;
+    }
+    return s;
+  }
+  isLayer(cx, cy) {     // 折り返された耳のマス
+    if (this.active < 0) return false;
+    const fd = this.folds[this.active];
+    return this.inTarget(fd, cx, cy) && this.baseSolid(this.mir(fd, cx), cy);
+  }
+  isBaseKept(cx, cy) {  // 元の位置に残っている紙のマス
+    if (!this.baseSolid(cx, cy)) return false;
+    return !(this.active >= 0 && this.inSource(this.folds[this.active], cx, cy));
+  }
+}
+
+// 主人公の体が重なるマスの範囲 [x0,x1,y0,y1]
+function heroCells(x, y) {
+  return [Math.floor(x - HERO.hw + 1e-6), Math.floor(x + HERO.hw - 1e-6),
+          Math.floor(y + 1e-6), Math.floor(y + HERO.h - 1e-6)];
+}
+
+// 折れる？  { ok, why }  why: far / side / active / overlap / onTab
+function canFold(w, i, x, y) {
+  if (w.active >= 0) return { ok: false, why: 'active' };
+  const fd = w.folds[i];
+  if (fd.dir > 0 ? x >= fd.f : x <= fd.f) return { ok: false, why: 'side' };   // 主人公は耳の反対側にいる
+  if (Math.abs(x - fd.f) > CFG.fold.near || y < fd.y0 - 5 || y > fd.y1 + 6) return { ok: false, why: 'far' };
+  const [x0, x1, y0, y1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  for (let cx = x0; cx <= x1; cx++) {
+    for (let cy = y0; cy <= y1; cy++)
+      if (w.inTarget(fd, cx, cy) && w.baseSolid(w.mir(fd, cx), cy)) return { ok: false, why: 'overlap' };
+    if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) return { ok: false, why: 'onTab' };   // 耳の上に乗っている
+  }
+  return { ok: true };
+}
+
+// 戻せる？  { ok, carried, nx }  耳の上に乗っていたら、耳ごと元の位置へ運ばれる（carried）
+function canUnfold(w, x, y) {
+  if (w.active < 0) return { ok: false, why: 'none' };
+  const fd = w.folds[w.active];
+  const [x0, x1] = heroCells(x, y);
+  const row = Math.floor(y - 0.05);
+  let layer = false, kept = false;
+  for (let cx = x0; cx <= x1; cx++) {
+    if (w.isBaseKept(cx, row)) kept = true; else if (w.isLayer(cx, row)) layer = true;
+  }
+  const carried = layer && !kept;
+  const nx = carried ? 2 * fd.f - x : x;
+  const [a0, a1, b0, b1] = heroCells(nx, y);
+  for (let cx = a0; cx <= a1; cx++) for (let cy = b0; cy <= b1; cy++)
+    if (w.solid(cx, cy, -1)) return { ok: false, why: 'overlap' };   // 戻すと紙に埋まる
+  return { ok: true, carried, nx };
+}
+
+// ---- 主人公の物理（足元が y、中心が x） ----
+function newHero(level) {
+  return { x: level.start.x, y: level.start.y, vx: 0, vy: 0, ground: true, face: 1, coyote: 0, buf: 0, jumping: false, jumped: false, landed: 0 };
+}
+
+// inp: { left, right, jumpHeld, jumpPressed }
+function stepHero(w, h, inp, dt) {
+  const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+  const target = dir * HERO.speed;
+  const acc = dir !== 0 ? (h.ground ? HERO.accelG : HERO.accelA) : (h.ground ? HERO.frictionG : HERO.accelA * 0.4);
+  if (h.vx < target) h.vx = Math.min(target, h.vx + acc * dt);
+  else if (h.vx > target) h.vx = Math.max(target, h.vx - acc * dt);
+  if (dir) h.face = dir;
+
+  h.coyote = h.ground ? HERO.coyote : Math.max(0, h.coyote - dt);
+  h.buf = inp.jumpPressed ? HERO.buffer : Math.max(0, h.buf - dt);
+  h.jumped = false; h.landed = 0;
+  if (h.buf > 0 && h.coyote > 0) { h.vy = HERO.jumpV; h.buf = 0; h.coyote = 0; h.ground = false; h.jumped = true; h.jumping = true; }
+  if (h.jumping && !inp.jumpHeld && h.vy > 0) { h.vy *= HERO.cutV; h.jumping = false; }
+  if (h.vy <= 0) h.jumping = false;
+  h.vy = Math.max(-HERO.maxFall, h.vy - HERO.gravity * dt);
+
+  // X
+  let nx = h.x + h.vx * dt;
+  const r = heroCells(h.x, h.y);
+  if (h.vx > 0) {
+    const cx = Math.floor(nx + HERO.hw);
+    for (let cy = r[2]; cy <= r[3]; cy++) if (w.solid(cx, cy)) { nx = cx - HERO.hw - 1e-4; h.vx = 0; break; }
+  } else if (h.vx < 0) {
+    const cx = Math.floor(nx - HERO.hw);
+    for (let cy = r[2]; cy <= r[3]; cy++) if (w.solid(cx, cy)) { nx = cx + 1 + HERO.hw + 1e-4; h.vx = 0; break; }
+  }
+  h.x = nx;
+
+  // Y
+  let ny = h.y + h.vy * dt;
+  const bx0 = Math.floor(h.x - HERO.hw + 1e-6), bx1 = Math.floor(h.x + HERO.hw - 1e-6);
+  const wasGround = h.ground;
+  h.ground = false;
+  if (h.vy <= 0) {
+    const cy = Math.floor(ny);
+    for (let cx = bx0; cx <= bx1; cx++) {
+      if (w.solid(cx, cy) && h.y >= cy + 1 - 1e-4) {
+        if (!wasGround && h.vy < -8) h.landed = Math.min(1, -h.vy / 20);
+        ny = cy + 1; h.vy = 0; h.ground = true; break;
+      }
+    }
+  } else {
+    const cy = Math.floor(ny + HERO.h);
+    for (let cx = bx0; cx <= bx1; cx++) if (w.solid(cx, cy)) { ny = cy - HERO.h - 1e-4; h.vy = 0; h.jumping = false; break; }
+  }
+  h.y = ny;
+}
+
+// ---- 到達検証：「立てるマス」の間を、歩き・ジャンプ・折る・戻すでつないで、ゴールに着けるか ----
+function surfaces(w, cx, active) {
+  const out = [];
+  if (cx < 0 || cx >= w.W) return out;
+  for (let y = 1; y < w.H - 2; y++)
+    if (w.solid(cx, y - 1, active) && !w.solid(cx, y, active) && !w.solid(cx, y + 1, active)) out.push(y);
+  return out;
+}
+
+function solve(w, level, opts = {}) {
+  const allowFold = opts.allowFold !== false;
+  const key = (a, cx, y) => ((a + 1) * 100 + cx) * 100 + y;
+  const sx = Math.floor(level.start.x), sy = level.start.y;
+  const gx = level.goal.x, gy = level.goal.y;
+  const prev = new Map(), q = [[-1, sx, sy]];
+  prev.set(key(-1, sx, sy), null);
+  const save = w.active;
+  let found = null;
+  const push = (from, a, cx, y, label) => {
+    const k = key(a, cx, y);
+    if (prev.has(k)) return;
+    prev.set(k, { from, label });
+    q.push([a, cx, y]);
+  };
+  while (q.length) {
+    const [a, cx, y] = q.shift();
+    if (Math.abs(cx + 0.5 - gx) <= 1.0 && Math.abs(y - gy) <= 1) { found = key(a, cx, y); break; }
+    const from = key(a, cx, y);
+    w.active = a;
+    for (let dx = -CFG.solver.maxGap; dx <= CFG.solver.maxGap; dx++) {
+      if (dx === 0) continue;
+      const nx = cx + dx, step = Math.sign(dx);
+      let blocked = false;
+      for (let k = cx + step; k !== nx; k += step)
+        if (w.solid(k, y + 2, a) || w.solid(k, y + 3, a)) { blocked = true; break; }
+      if (blocked) continue;
+      const ys = surfaces(w, nx, a).filter(v => v <= y + CFG.solver.stepUp);
+      if (!ys.length) continue;
+      if (Math.abs(dx) === 1) { for (const v of ys) if (v >= y - 7) push(from, a, nx, v, 'move'); }
+      else push(from, a, nx, Math.max(...ys), 'jump');
+    }
+    if (allowFold) {
+      const hx = cx + 0.5;
+      if (a < 0) {
+        for (let i = 0; i < w.folds.length; i++)
+          if (canFold(w, i, hx, y).ok) push(from, i, cx, y, 'fold ' + i);
+      } else {
+        const r = canUnfold(w, hx, y);
+        if (r.ok) push(from, -1, Math.floor(r.nx), y, 'unfold ' + a + (r.carried ? ' carried' : ''));
+      }
+    }
+  }
+  w.active = save;
+  if (found === null) return { solvable: false, steps: [] };
+  const steps = [];
+  for (let k = found; prev.get(k); k = prev.get(k).from) steps.unshift(prev.get(k).label);
+  return { solvable: true, steps, folds: steps.filter(s => s.startsWith('fold')).length };
+}
+// ===== 3D 描画（three.js r128）。判定は 20-logic.js の2Dマス目、ここは見た目だけ =====
+const GAME3D = (function () {
+  let renderer, scene, camera, sun, container;
+  let heroRoot, heroBody, heroTail;
+  let foldGroups = [], markers = [], flag, flagGlow;
+  let camX = 0, camY = 6, shakeT = 0;
+  const D = 0.5;            // 紙の厚み（奥行き）
+
+  // ---- 紙のテクスチャ（繊維とざらつきを canvas で生成） ----
+  function paperTex(seed) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 128, 128);
+    let s = seed * 9301 + 49297;
+    const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    for (let i = 0; i < 900; i++) {
+      const x = rnd() * 128, y = rnd() * 128, l = 3 + rnd() * 9, a = rnd() * Math.PI;
+      g.strokeStyle = rnd() < 0.5 ? 'rgba(120,100,70,0.07)' : 'rgba(255,255,255,0.35)';
+      g.lineWidth = 0.6 + rnd() * 0.8;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    }
+    for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(90,70,40,${rnd() * 0.06})`; g.fillRect(rnd() * 128, rnd() * 128, 1.5, 1.5); }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+  const TEX = {};
+  const mat = (color, tex) => new THREE.MeshLambertMaterial({ color, map: tex || TEX.a });
+
+  const M = {};
+  function makeMaterials() {
+    TEX.a = paperTex(1); TEX.b = paperTex(7);
+    M.edge = mat(0xfaf3df);
+    M.ground = mat(0x93d38c);   M.groundBack = mat(0x6fae7a, TEX.b);
+    M.wall = mat(0x8ec5ee);     M.wallBack = mat(0x6a9fcf, TEX.b);
+    M.tab = mat(0xffd76f);      M.tabBack = mat(0xff8a66, TEX.b);   // 耳は黄色、裏は珊瑚色
+    M.cap = mat(0x5fb86a);      M.capTab = mat(0xffb938);
+  }
+
+  const boxGeo = new THREE.BoxGeometry(1, 1, D);
+  const capGeo = new THREE.BoxGeometry(1.0, 0.2, D + 0.04);
+
+  function cellMesh(front, back) {
+    // 面の順: +x, -x, +y, -y, +z, -z
+    const m = new THREE.Mesh(boxGeo, [M.edge, M.edge, M.edge, M.edge, front, back]);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  }
+
+  function buildLevel(world) {
+    const W = world.W, H = world.H;
+    const inFold = (cx, cy) => world.folds.findIndex(fd => world.inSource(fd, cx, cy));
+    foldGroups = world.folds.map(fd => {
+      const g = new THREE.Group();
+      g.position.set(fd.f, 0, 0);       // 折り目を軸に回る
+      scene.add(g);
+      return g;
+    });
+    for (let cy = 0; cy < H; cy++) for (let cx = 0; cx < W; cx++) {
+      if (!world.baseSolid(cx, cy)) continue;
+      const fi = inFold(cx, cy);
+      const isTab = fi >= 0;
+      const tall = cy >= 2 && !(cx < 16 && cy < 2);
+      const m = isTab ? cellMesh(M.tab, M.tabBack) : (tall ? cellMesh(M.wall, M.wallBack) : cellMesh(M.ground, M.groundBack));
+      if (isTab) m.scale.z = 0.92;
+      const open = !world.baseSolid(cx, cy + 1);
+      if (isTab) m.position.set(cx + 0.5 - world.folds[fi].f, cy + 0.5, 0);
+      else m.position.set(cx + 0.5, cy + 0.5, 0);
+      (isTab ? foldGroups[fi] : scene).add(m);
+      if (open) {
+        const cap = new THREE.Mesh(capGeo, isTab ? M.capTab : M.cap);
+        cap.position.set(m.position.x, cy + 0.9, 0);
+        cap.castShadow = false; cap.receiveShadow = true;
+        (isTab ? foldGroups[fi] : scene).add(cap);
+      }
+    }
+    // 折り目の点線
+    markers = world.folds.map(fd => {
+      const g = new THREE.Group();
+      const m = new THREE.MeshBasicMaterial({ color: 0x8a7a66 });
+      const top = fd.y1 + 1.4, bot = fd.y0 - 0.2;
+      for (let y = bot; y < top; y += 0.55) {
+        const d = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), m);
+        d.position.set(fd.f, y + 0.16, D / 2 + 0.06);
+        g.add(d);
+      }
+      g.userData.mat = m;
+      scene.add(g);
+      return g;
+    });
+  }
+
+  // ---- 背景：紙の切り絵を何層も重ねる ----
+  function hill(color, z, baseY, amp, freq, phase, x0, x1) {
+    const s = new THREE.Shape();
+    s.moveTo(x0, -30);
+    for (let x = x0; x <= x1; x += 1.5) s.lineTo(x, baseY + Math.sin(x * freq + phase) * amp + Math.sin(x * freq * 2.3 + phase * 1.7) * amp * 0.4);
+    s.lineTo(x1, -30); s.closePath();
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color, map: TEX.b }));
+    m.position.z = z; m.receiveShadow = false;
+    scene.add(m);
+  }
+  function cloud(x, y, z, sc) {
+    const g = new THREE.Group();
+    const mt = new THREE.MeshLambertMaterial({ color: 0xffffff, map: TEX.a });
+    [[0, 0, 1.6], [1.5, 0.3, 1.2], [-1.5, 0.2, 1.1], [0.6, 0.9, 1.0]].forEach(([dx, dy, r]) => {
+      const c = new THREE.Mesh(new THREE.CircleGeometry(r, 20), mt); c.position.set(dx, dy, 0); g.add(c);
+    });
+    g.position.set(x, y, z); g.scale.setScalar(sc); scene.add(g);
+  }
+  function tree(x, z, sc, col) {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.9), new THREE.MeshLambertMaterial({ color: 0xa87b52, map: TEX.b }));
+    trunk.position.y = 0.45; g.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const s = new THREE.Shape(); const w = 1.5 - i * 0.3;
+      s.moveTo(-w, 0); s.lineTo(w, 0); s.lineTo(0, 1.5); s.closePath();
+      const t = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color: col, map: TEX.a }));
+      t.position.set(0, 0.7 + i * 0.75, 0.01 * i); g.add(t);
+    }
+    g.position.set(x, 2, z); g.scale.setScalar(sc); scene.add(g);
+  }
+  function buildBackdrop() {
+    hill(0xcfe9d4, -26, 4.5, 3.2, 0.11, 0.5, -40, 110);
+    hill(0xb5dcb8, -18, 3.2, 2.6, 0.16, 2.0, -40, 110);
+    hill(0x9ccf9e, -11, 2.4, 1.8, 0.22, 4.2, -40, 110);
+    [[6, 11, -22, 1.4], [26, 12.5, -24, 1.7], [48, 10.5, -20, 1.3], [66, 12, -25, 1.8], [-8, 12, -23, 1.5]].forEach(a => cloud(...a));
+    [[3, -2.5, 1.2, 0x5aa96a], [11, -3.5, 1.5, 0x7bc27f], [19, -2.8, 1.1, 0x5aa96a], [29, -3, 1.4, 0x7bc27f],
+     [37, -2.5, 1.2, 0x5aa96a], [47, -3.3, 1.6, 0x7bc27f], [55, -2.6, 1.2, 0x5aa96a]].forEach(a => tree(...a));
+  }
+
+  // ---- 主人公：折り紙のキツネ「カミ」 ----
+  function buildHero() {
+    heroRoot = new THREE.Group();
+    heroBody = new THREE.Group();     // つぶれ・のびはここ（足元が原点）
+    heroRoot.add(heroBody);
+    const orange = new THREE.MeshLambertMaterial({ color: 0xff8f3a, map: TEX.a });
+    const white = new THREE.MeshLambertMaterial({ color: 0xfffaf0, map: TEX.a });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x3a2a20 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.34), orange); body.position.set(0, 0.55, 0);
+    const belly = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.4, 0.04), white); belly.position.set(0.1, 0.5, 0.19);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.46, 0.4), orange); head.position.set(0.12, 1.12, 0);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.34, 4), white); snout.rotation.z = -Math.PI / 2; snout.position.set(0.56, 1.05, 0);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), dark); nose.position.set(0.72, 1.05, 0);
+    const earG = new THREE.ConeGeometry(0.16, 0.42, 4);
+    const ear1 = new THREE.Mesh(earG, orange); ear1.position.set(0.0, 1.5, 0.12);
+    const ear2 = new THREE.Mesh(earG, orange); ear2.position.set(0.24, 1.5, -0.12);
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.05), dark); eye.position.set(0.36, 1.18, 0.21);
+    const eye2 = eye.clone(); eye2.position.z = -0.21;
+    heroTail = new THREE.Group(); heroTail.position.set(-0.3, 0.45, 0);
+    const tailM = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.85, 4), orange); tailM.rotation.z = Math.PI / 2 + 0.5; tailM.position.set(-0.4, 0.1, 0);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), white); tip.rotation.z = Math.PI / 2 + 0.5; tip.position.set(-0.78, 0.3, 0);
+    heroTail.add(tailM, tip);
+    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.3), orange); legs.position.set(0, 0.12, 0);
+    [body, belly, head, snout, nose, ear1, ear2, eye, eye2, tailM, tip, legs].forEach(m => { m.castShadow = true; });
+    heroBody.add(body, belly, head, snout, nose, ear1, ear2, eye, eye2, heroTail, legs);
+    scene.add(heroRoot);
+  }
+
+  // ---- ゴール旗 ----
+  function buildGoal(level) {
+    flag = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.6, 0.1), new THREE.MeshLambertMaterial({ color: 0xfaf3df }));
+    pole.position.y = 1.3;
+    const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(1.3, 0.4); s.lineTo(0, 0.8); s.closePath();
+    const cloth = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color: 0xff5d7a, side: THREE.DoubleSide }));
+    cloth.position.set(0.05, 1.85, 0);
+    flagGlow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.35 }));
+    flagGlow.position.set(0.5, 1.8, -0.2);
+    flag.add(pole, cloth, flagGlow);
+    flag.position.set(level.goal.x, level.goal.y, 0);
+    flag.userData.cloth = cloth;
+    scene.add(flag);
+  }
+
+  function init(el, world, level) {
+    container = el;
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(CFG.cam.fov, 16 / 9, 0.5, 200);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb8d8b0, 0.78));
+    sun = new THREE.DirectionalLight(0xfff0d0, 0.85);
+    sun.position.set(-8, 18, 16);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const sc = sun.shadow.camera; sc.left = -22; sc.right = 22; sc.top = 14; sc.bottom = -8; sc.near = 1; sc.far = 60;
+    sun.shadow.bias = -0.0005;
+    scene.add(sun); scene.add(sun.target);
+    makeMaterials();
+    buildBackdrop();
+    buildLevel(world);
+    buildHero();
+    buildGoal(level);
+    camX = level.start.x; camY = CFG.cam.minY;
+    resize();
+    window.addEventListener('resize', resize);
+  }
+
+  function resize() {
+    if (!renderer) return;
+    const w = container.clientWidth || 640, h = container.clientHeight || 360;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+
+  const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
+
+  // st: { hero, world, anim, shake:{i,t}|null, candidate, time }
+  function update(dt, st) {
+    const { hero, world, anim, shake } = st;
+    // 折りの角度
+    for (let i = 0; i < foldGroups.length; i++) {
+      const fd = world.folds[i];
+      let p = world.active === i ? 1 : 0;
+      if (anim && anim.i === i) { const e = ease(anim.t / CFG.fold.dur); p = anim.fold ? e : 1 - e; }
+      let rot = -fd.dir * Math.PI * p;
+      if (shake && shake.i === i) rot += Math.sin(shake.t * 70) * 0.07 * (1 - shake.t / CFG.fold.shakeDur) * -fd.dir;
+      foldGroups[i].rotation.y = rot;
+      // 折り目の点線：候補は金色に脈打つ
+      const mk = markers[i].userData.mat;
+      const hot = st.candidate === i || world.active === i;
+      mk.color.setHex(hot ? (Math.sin(st.time * 8) > 0 ? 0xffa800 : 0xff6a00) : 0x8a7a66);
+      markers[i].visible = true;
+    }
+    // 主人公
+    let hx = hero.x, hy = hero.y, hz = 0;
+    if (anim && anim.carried) {
+      const fd = world.folds[anim.i];
+      const e = ease(anim.t / CFG.fold.dur), p = anim.fold ? e : 1 - e;   // 折れた角度（1 = 完全に折れている）
+      const d1 = anim.x1 - fd.f;                                          // 元の位置の折り目からの距離
+      hx = fd.f + d1 * Math.cos(Math.PI * p);
+      hz = Math.abs(d1) * Math.sin(Math.PI * p);
+    }
+    heroRoot.position.set(hx, hy, hz);
+    heroRoot.scale.x = hero.face >= 0 ? 1 : -1;
+    // つぶれ・のび・走りのはずみ
+    const speed = Math.abs(hero.vx);
+    let sx = 1, sy = 1;
+    if (!hero.ground) { const k = Math.min(0.25, Math.abs(hero.vy) * 0.018); sy = 1 + k; sx = 1 - k * 0.6; }
+    else if (st.squash > 0) { sy = 1 - 0.32 * st.squash; sx = 1 + 0.28 * st.squash; }
+    else if (speed > 0.5) { sy = 1 + Math.sin(st.time * 22) * 0.04; }
+    heroBody.scale.set(sx, sy, 1);
+    heroTail.rotation.z = Math.sin(st.time * (6 + speed)) * 0.25 + (hero.ground ? 0 : 0.35);
+    // ゴール
+    flag.userData.cloth.rotation.y = Math.sin(st.time * 3) * 0.25;
+    flagGlow.scale.setScalar(1 + Math.sin(st.time * 3) * 0.08);
+    // カメラ
+    const tx = Math.min(world.W - 11, Math.max(11, hx + hero.face * 2.2));
+    const ty = Math.max(CFG.cam.minY, hy + 2.6);
+    const k = 1 - Math.exp(-CFG.cam.smooth * dt);
+    camX += (tx - camX) * k; camY += (ty - camY) * k;
+    camera.position.set(camX, camY + 1.2, CFG.cam.dist);
+    camera.lookAt(camX, camY, 0);
+    sun.position.set(camX - 8, 18, 16); sun.target.position.set(camX, 3, 0); sun.target.updateMatrixWorld();
+  }
+
+  function snapCamera(x, y) { camX = x; camY = Math.max(CFG.cam.minY, y + 2.6); }
+  function render() { renderer.render(scene, camera); }
+  return { init, update, render, resize, snapCamera };
+})();
+// ===== 入力・HUD・画面の出し入れ =====
+const $ = id => document.getElementById(id);
+const INPUT = { left: false, right: false, jumpHeld: false, jumpPressed: false, foldPressed: false, touch: false };
+const KEYMAP = {
+  ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+  ArrowUp: 'jump', KeyW: 'jump', Space: 'jump', KeyF: 'fold', KeyJ: 'fold',
+};
+let onPause = () => {}, onRetry = () => {};
+
+function setKey(code, down) {
+  const a = KEYMAP[code];
+  if (!a) return false;
+  if (a === 'left' || a === 'right') INPUT[a] = down;
+  else if (a === 'jump') { if (down && !INPUT.jumpHeld) INPUT.jumpPressed = true; INPUT.jumpHeld = down; }
+  else if (a === 'fold') { if (down) INPUT.foldPressed = true; }
+  return true;
+}
+addEventListener('keydown', e => {
+  if (e.repeat) { if (KEYMAP[e.code]) e.preventDefault(); return; }
+  if (e.code === 'Escape') { onPause(); return; }
+  if (e.code === 'KeyR') { onRetry(); return; }
+  if (setKey(e.code, true)) e.preventDefault();
+});
+addEventListener('keyup', e => { if (setKey(e.code, false)) e.preventDefault(); });
+addEventListener('blur', () => { INPUT.left = INPUT.right = INPUT.jumpHeld = false; });
+
+// タッチボタン
+function bindBtn(id, down, up) {
+  const el = $(id);
+  const on = e => { e.preventDefault(); INPUT.touch = true; document.body.classList.add('touch'); el.classList.add('down'); down(); };
+  const off = e => { e.preventDefault(); el.classList.remove('down'); up && up(); };
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointercancel', off);
+  el.addEventListener('pointerleave', off);
+}
+bindBtn('bL', () => INPUT.left = true, () => INPUT.left = false);
+bindBtn('bR', () => INPUT.right = true, () => INPUT.right = false);
+bindBtn('bJ', () => { if (!INPUT.jumpHeld) INPUT.jumpPressed = true; INPUT.jumpHeld = true; }, () => INPUT.jumpHeld = false);
+bindBtn('bF', () => INPUT.foldPressed = true);
+addEventListener('touchstart', () => { INPUT.touch = true; document.body.classList.add('touch'); }, { passive: true, once: true });
+if (matchMedia('(pointer: coarse)').matches) { INPUT.touch = true; document.body.classList.add('touch'); }
+
+// スマホが縦向きの間は案内（#rotate）を出してゲームを止める
+const portrait = matchMedia('(orientation: portrait) and (pointer: coarse)');
+
+// スマホではじめるとき、全画面にして横向きに固定してみる（できない端末では何もしない）
+function tryLandscape() {
+  const el = document.documentElement;
+  if (!el.requestFullscreen) return;
+  el.requestFullscreen().then(() => {
+    if (screen.orientation && screen.orientation.lock) return screen.orientation.lock('landscape');
+  }).catch(() => {});
+}
+
+const HUD = {
+  show(name) {
+    ['scTitle', 'scPause', 'scClear'].forEach(id => $(id).classList.toggle('on', id === name));
+  },
+  playing(on) { document.body.classList.toggle('playing', on); },
+  time(t) { $('tagTime').textContent = t.toFixed(1) + ' s'; },
+  prompt(text, warn) {
+    const p = $('prompt');
+    if (!text) { p.style.display = 'none'; return; }
+    p.style.display = 'block'; p.textContent = text; p.classList.toggle('warn', !!warn);
+  },
+  canFold(on) { document.body.classList.toggle('canfold', on); },
+  toast(text) {
+    const t = $('toast'); t.textContent = text; t.classList.add('on');
+    clearTimeout(HUD._tt); HUD._tt = setTimeout(() => t.classList.remove('on'), 1500);
+  },
+};
+// ===== ゲーム本体（状態・ループ） =====
+const world = new World(LEVEL);
+let hero = newHero(LEVEL);
+let state = 'title';          // title | play | pause | clear
+let anim = null;              // { i, fold, t, carried, x0, x1 }
+let shake = null;             // { i, t }
+let time = 0, clock = 0, foldCount = 0, squash = 0, candidate = -1, fade = 0;
+
+GAME3D.init($('view'), world, LEVEL);
+
+function resetStage() {
+  world.active = -1; anim = null; shake = null;
+  hero = newHero(LEVEL);
+  GAME3D.snapCamera(hero.x, hero.y);
+}
+function startGame() {
+  resetStage(); time = 0; foldCount = 0;
+  state = 'play'; HUD.show(null); HUD.playing(true);
+}
+function respawn() {   // 落ちたら最初の位置から。折りも元に戻す
+  resetStage(); fade = 1; HUD.toast('落ちた！ もういちど');
+}
+function pause(on) {
+  if (state === 'play' && on !== false) { state = 'pause'; HUD.show('scPause'); }
+  else if (state === 'pause' && on !== true) { state = 'play'; HUD.show(null); }
+}
+onPause = () => pause();
+onRetry = () => { if (state === 'play' || state === 'pause') { resetStage(); time = 0; foldCount = 0; state = 'play'; HUD.show(null); } };
+
+$('btnStart').addEventListener('click', () => { if (INPUT.touch) tryLandscape(); startGame(); });
+$('btnResume').addEventListener('click', () => pause(false));
+$('btnRetry').addEventListener('click', () => onRetry());
+$('btnAgain').addEventListener('click', () => startGame());
+
+const WHY = {
+  overlap: '紙が重なって折れない', onTab: '乗っている紙は折れない',
+};
+
+function tryFold() {
+  if (anim || !hero.ground) return;
+  if (world.active >= 0) {
+    const r = canUnfold(world, hero.x, hero.y);
+    if (r.ok) { anim = { i: world.active, fold: false, t: 0, carried: r.carried, x0: hero.x, x1: r.nx }; }
+    else { shake = { i: world.active, t: 0 }; HUD.toast('紙が重なって戻せない'); }
+    return;
+  }
+  let best = -1, bestD = 1e9, blocked = -1, why = '';
+  for (let i = 0; i < world.folds.length; i++) {
+    const r = canFold(world, i, hero.x, hero.y), d = Math.abs(hero.x - world.folds[i].f);
+    if (r.ok) { if (d < bestD) { bestD = d; best = i; } }
+    else if ((r.why === 'overlap' || r.why === 'onTab') && blocked < 0) { blocked = i; why = r.why; }
+  }
+  if (best >= 0) { anim = { i: best, fold: true, t: 0, carried: false, x0: hero.x, x1: hero.x }; foldCount++; }
+  else if (blocked >= 0) { shake = { i: blocked, t: 0 }; HUD.toast(WHY[why]); }
+}
+
+function updateCandidate() {
+  candidate = -1;
+  if (anim) return;
+  if (world.active >= 0) { candidate = world.active; return; }
+  let bestD = 1e9;
+  for (let i = 0; i < world.folds.length; i++) {
+    const r = canFold(world, i, hero.x, hero.y);
+    if (r.ok || r.why === 'overlap' || r.why === 'onTab') {
+      const d = Math.abs(hero.x - world.folds[i].f);
+      if (d < bestD) { bestD = d; candidate = i; }
+    }
+  }
+}
+
+function update(dt) {
+  time += dt;
+  if (anim) {
+    anim.t += dt;
+    if (anim.t >= CFG.fold.dur) {
+      world.active = anim.fold ? anim.i : -1;
+      if (anim.carried) { hero.x = anim.x1; hero.vx = 0; hero.vy = 0; }
+      anim = null;
+    }
+  } else {
+    if (INPUT.foldPressed) tryFold();
+    if (!anim) {
+      stepHero(world, hero, INPUT, dt);
+      if (hero.landed) squash = Math.max(squash, hero.landed);
+      if (hero.y < CFG.hero.deathY) respawn();
+      if (Math.abs(hero.x - LEVEL.goal.x) < 0.9 && Math.abs(hero.y - LEVEL.goal.y) < 1.2) {
+        state = 'clear'; HUD.playing(false);
+        $('clearInfo').innerHTML = `タイム ${time.toFixed(1)} 秒　／　折った回数 ${foldCount} 回`;
+        HUD.show('scClear');
+      }
+    }
+  }
+  INPUT.foldPressed = false; INPUT.jumpPressed = false;
+  if (shake) { shake.t += dt; if (shake.t > CFG.fold.shakeDur) shake = null; }
+  squash = Math.max(0, squash - dt * 5);
+  updateCandidate();
+  // ガイド表示
+  if (anim) HUD.prompt('');
+  else if (world.active >= 0) { const r = canUnfold(world, hero.x, hero.y); HUD.prompt(r.ok ? (r.carried ? 'F：元に戻す（紙ごと運ばれる）' : 'F：元に戻す') : '重なっていて戻せない', !r.ok); }
+  else if (candidate >= 0) { const r = canFold(world, candidate, hero.x, hero.y); HUD.prompt(r.ok ? 'F：折る' : WHY[r.why], !r.ok); }
+  else HUD.prompt('');
+  HUD.canFold(!anim && candidate >= 0);
+  HUD.time(time);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now; clock += dt;
+  if (state === 'play' && !portrait.matches) {
+    let rest = dt;                       // 物理は 1/120 秒刻み
+    while (rest > 1e-6) { const s = Math.min(rest, 1 / 120); update(s); rest -= s; if (state !== 'play') break; }
+  }
+  GAME3D.update(dt, { hero, world, anim, shake, candidate, time: clock, squash });
+  GAME3D.render();
+  requestAnimationFrame(frame);
+}
+GAME3D.snapCamera(hero.x, hero.y);
+requestAnimationFrame(frame);
+
+// 検証用に外から見られるようにしておく（遊びには影響しない）
+window.__game = { world, get hero() { return hero; }, get state() { return state; }, startGame };
+
+</script>
+</body>
+</html>

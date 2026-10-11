@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>検証 — 折りたたまれた世界</title>
+<style>
+  body{font-family:"Yu Gothic UI",system-ui,sans-serif;background:#1c1c1e;color:#eee;padding:24px;line-height:1.7}
+  h1{font-size:18px;margin-bottom:16px}
+  .r{padding:4px 0;border-bottom:1px solid #333}
+  .ok::before{content:"PASS ";color:#6bd07a;font-weight:bold}
+  .ng::before{content:"FAIL ";color:#ff6b6b;font-weight:bold}
+  .ng{color:#ffb0b0}
+  .why{color:#ff8f8f;padding-left:3em;font-size:13px}
+  #sum{margin-top:18px;font-size:16px;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>折りたたまれた世界 — 検証</h1>
+<div id="out"></div>
+<div id="sum"></div>
+<script>
+"use strict";
