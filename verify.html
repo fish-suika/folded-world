@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>検証 — 折りたたまれた世界</title>
+<title>検証 — カミと折り目の世界</title>
 <style>
   body{font-family:"Yu Gothic UI",system-ui,sans-serif;background:#1c1c1e;color:#eee;padding:24px;line-height:1.7}
   h1{font-size:18px;margin-bottom:16px}
@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-<h1>折りたたまれた世界 — 検証</h1>
+<h1>カミと折り目の世界 — 検証</h1>
 <div id="out"></div>
 <div id="sum"></div>
 <script>
@@ -493,9 +493,9 @@ function heroSupported(w, x, y, mask) {
 }
 // 折り先に体が重なるとき：上へ持ち上げて紙の上に乗せる（最大 CFG.fold.lift マス）。だめなら横へ押し出す。
 // 返り値 { x, y } または null（どうしても入らない）
-function resolveFit(w, x, y, mask) {
+function resolveFit(w, x, y, mask, maxLift = CFG.fold.lift) {
   if (heroFits(w, x, y, mask)) return { x, y };
-  for (let dy = 1; dy <= CFG.fold.lift; dy++)
+  for (let dy = 1; dy <= maxLift; dy++)
     if (heroFits(w, x, y + dy, mask) && heroSupported(w, x, y + dy, mask)) return { x, y: y + dy };
   for (const needSupport of [true, false])
     for (let d = 0.5; d <= CFG.fold.push + 1e-9; d += 0.5)
@@ -520,10 +520,10 @@ function canFold(w, i, x, y) {
   for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
   if (fd.axis === 'x') {
     // 主人公は耳の反対側にいる。ただし「乗って折る」耳（ride）は、耳の上に乗って折る
-    if (!(fd.ride && onTab) && (fd.dir > 0 ? x >= fd.f : x <= fd.f)) return { ok: false, why: 'side' };
+    if (!onTab && (fd.dir > 0 ? x >= fd.f : x <= fd.f)) return { ok: false, why: 'side' };
     if (Math.abs(x - fd.f) > CFG.fold.near || y < fd.y0 - 5 || y > fd.y1 + 6) return { ok: false, why: 'far' };
   } else {
-    if (fd.dir > 0 ? y >= fd.f : y < fd.f) return { ok: false, why: 'side' };
+    if (!onTab && (fd.dir > 0 ? y >= fd.f : y < fd.f)) return { ok: false, why: 'side' };
     if (Math.abs(y - fd.f) > CFG.fold.near || x < fd.x0 - 4 || x > fd.x1 + 4) return { ok: false, why: 'far' };
   }
   const carried = onTab && fd.axis === 'x';
@@ -550,11 +550,11 @@ function canUnfold(w, j, x, y) {
   }
   const carried = onJ && !kept && !onOther && fd.axis === 'x';
   const mask2 = w.mask & ~(1 << j);
-  const res = resolveFit(w, carried ? 2 * fd.f - x : x, y, mask2);
-  if (!res) return { ok: false, why: 'overlap' };
-  // 縦の折りで運ばれた先に足場がなければ（裏面の板の上）、落ちてしまうので戻せない
-  if (carried && !heroSupported(w, res.x, res.y, mask2)) return { ok: false, why: 'void' };
-  return { ok: true, carried, nx: res.x, y: res.y };
+  // 乗っていても必ず戻せる。戻した紙が体に重なるなら持ち上げる（足場がなければ、そのまま落ちる）
+  let res = resolveFit(w, carried ? 2 * fd.f - x : x, y, mask2);
+  let moved = carried;
+  if (!res) { res = resolveFit(w, x, y, mask2) || { x, y }; moved = false; }   // 運ばれる先が紙でふさがれているときは、その場に残って足場だけが動く
+  return { ok: true, carried: moved, nx: res.x, y: res.y };
 }
 
 // 次に折りたい折り目 j を、前の折りを自動で戻しながら折る計画
@@ -769,7 +769,8 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   T('板を折ると穴（7〜14）にかかり、元の位置（15〜22 の行1）は空になる', ok && !w.solid(15, 1) && !w.solid(22, 1) && w.solid(15, 0));
   w.mask = 0;
   T('近づくと折れる／遠いと折れない', canFold(w, 0, 6.5, 2).ok && !canFold(w, 0, 0.5, 2).ok);
-  T('耳の反対側（向こう岸）からは折れない', !canFold(w, 0, 17, 2).ok);
+  T('耳の上に乗っていても折れる（耳ごと運ばれる）', (() => { const c = canFold(w, 0, 17, 2); return c.ok && c.carried && Math.abs(c.x - 13) < 1e-6; })());
+  T('耳の外の向こう岸（耳の反対側ではない側）からは折れない', !canFold(w, 0, 27, 2).ok);
   // 板の上で戻すと、板ごと向こう岸へ運ばれる
   w.mask = 1;
   const u = canUnfold(w, 0, 10.5, 2);
@@ -816,7 +817,7 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   w.mask = 1;
   let ok = true; for (let cx = 7; cx <= 14; cx++) if (!w.solid(cx, 2)) ok = false;
   T('折ると裏面の板（上面 3）が穴にかかる', ok);
-  T('裏面の板の上で戻そうとすると「足場がない」で戻せない', (() => { const u = canUnfold(w, 0, 10.5, 3); return !u.ok && u.why === 'void'; })());
+  T('裏面の板の上でも戻せる（元の位置に足場がなければ、そのまま落ちる）', canUnfold(w, 0, 10.5, 3).ok);
 
   L = mk(l => { LB.run(l, 7); LB.cliffY(l, 4, 6); LB.run(l, 4); });
   w = new World(L);
@@ -824,7 +825,7 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   w.mask = 1;
   T('横に折ると崖の上（行4〜5）が下へ折り返り、上面が 4 になる', !w.solid(8, 4) && !w.solid(8, 5) && w.solid(8, 3) && w.solid(8, 2));
   w.mask = 0;
-  T('横の折りは、耳の下から折る（上にいると折れない）', canFold(w, 0, 5, 2).ok && !canFold(w, 0, 8, 6).ok);
+  T('横の折りは耳の下から。耳の上に乗っていても折れる（落ちて降りる）。耳の外の高い所からは折れない', canFold(w, 0, 5, 2).ok && canFold(w, 0, 8, 6).ok && !canFold(w, 0, 5, 7).ok);
 
   L = mk(l => { LB.run(l, 7); LB.stairsY(l, 2, 8, 7); }, {});
   w = new World(L);

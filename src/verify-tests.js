@@ -46,7 +46,8 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   T('板を折ると穴（7〜14）にかかり、元の位置（15〜22 の行1）は空になる', ok && !w.solid(15, 1) && !w.solid(22, 1) && w.solid(15, 0));
   w.mask = 0;
   T('近づくと折れる／遠いと折れない', canFold(w, 0, 6.5, 2).ok && !canFold(w, 0, 0.5, 2).ok);
-  T('耳の反対側（向こう岸）からは折れない', !canFold(w, 0, 17, 2).ok);
+  T('耳の上に乗っていても折れる（耳ごと運ばれる）', (() => { const c = canFold(w, 0, 17, 2); return c.ok && c.carried && Math.abs(c.x - 13) < 1e-6; })());
+  T('耳の外の向こう岸（耳の反対側ではない側）からは折れない', !canFold(w, 0, 27, 2).ok);
   // 板の上で戻すと、板ごと向こう岸へ運ばれる
   w.mask = 1;
   const u = canUnfold(w, 0, 10.5, 2);
@@ -93,7 +94,7 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   w.mask = 1;
   let ok = true; for (let cx = 7; cx <= 14; cx++) if (!w.solid(cx, 2)) ok = false;
   T('折ると裏面の板（上面 3）が穴にかかる', ok);
-  T('裏面の板の上で戻そうとすると「足場がない」で戻せない', (() => { const u = canUnfold(w, 0, 10.5, 3); return !u.ok && u.why === 'void'; })());
+  T('裏面の板の上でも戻せる（元の位置に足場がなければ、そのまま落ちる）', canUnfold(w, 0, 10.5, 3).ok);
 
   L = mk(l => { LB.run(l, 7); LB.cliffY(l, 4, 6); LB.run(l, 4); });
   w = new World(L);
@@ -101,7 +102,7 @@ function mk(fn, opts) { const L = LB.make('t', 't', '', 1, 'meadow', opts || {})
   w.mask = 1;
   T('横に折ると崖の上（行4〜5）が下へ折り返り、上面が 4 になる', !w.solid(8, 4) && !w.solid(8, 5) && w.solid(8, 3) && w.solid(8, 2));
   w.mask = 0;
-  T('横の折りは、耳の下から折る（上にいると折れない）', canFold(w, 0, 5, 2).ok && !canFold(w, 0, 8, 6).ok);
+  T('横の折りは耳の下から。耳の上に乗っていても折れる（落ちて降りる）。耳の外の高い所からは折れない', canFold(w, 0, 5, 2).ok && canFold(w, 0, 8, 6).ok && !canFold(w, 0, 5, 7).ok);
 
   L = mk(l => { LB.run(l, 7); LB.stairsY(l, 2, 8, 7); }, {});
   w = new World(L);

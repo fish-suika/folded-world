@@ -140,9 +140,9 @@ function heroSupported(w, x, y, mask) {
 }
 // 折り先に体が重なるとき：上へ持ち上げて紙の上に乗せる（最大 CFG.fold.lift マス）。だめなら横へ押し出す。
 // 返り値 { x, y } または null（どうしても入らない）
-function resolveFit(w, x, y, mask) {
+function resolveFit(w, x, y, mask, maxLift = CFG.fold.lift) {
   if (heroFits(w, x, y, mask)) return { x, y };
-  for (let dy = 1; dy <= CFG.fold.lift; dy++)
+  for (let dy = 1; dy <= maxLift; dy++)
     if (heroFits(w, x, y + dy, mask) && heroSupported(w, x, y + dy, mask)) return { x, y: y + dy };
   for (const needSupport of [true, false])
     for (let d = 0.5; d <= CFG.fold.push + 1e-9; d += 0.5)
@@ -167,10 +167,10 @@ function canFold(w, i, x, y) {
   for (let cx = x0; cx <= x1; cx++) if (w.inSource(fd, cx, row) && w.baseSolid(cx, row)) onTab = true;
   if (fd.axis === 'x') {
     // 主人公は耳の反対側にいる。ただし「乗って折る」耳（ride）は、耳の上に乗って折る
-    if (!(fd.ride && onTab) && (fd.dir > 0 ? x >= fd.f : x <= fd.f)) return { ok: false, why: 'side' };
+    if (!onTab && (fd.dir > 0 ? x >= fd.f : x <= fd.f)) return { ok: false, why: 'side' };
     if (Math.abs(x - fd.f) > CFG.fold.near || y < fd.y0 - 5 || y > fd.y1 + 6) return { ok: false, why: 'far' };
   } else {
-    if (fd.dir > 0 ? y >= fd.f : y < fd.f) return { ok: false, why: 'side' };
+    if (!onTab && (fd.dir > 0 ? y >= fd.f : y < fd.f)) return { ok: false, why: 'side' };
     if (Math.abs(y - fd.f) > CFG.fold.near || x < fd.x0 - 4 || x > fd.x1 + 4) return { ok: false, why: 'far' };
   }
   const carried = onTab && fd.axis === 'x';
@@ -197,11 +197,11 @@ function canUnfold(w, j, x, y) {
   }
   const carried = onJ && !kept && !onOther && fd.axis === 'x';
   const mask2 = w.mask & ~(1 << j);
-  const res = resolveFit(w, carried ? 2 * fd.f - x : x, y, mask2);
-  if (!res) return { ok: false, why: 'overlap' };
-  // 縦の折りで運ばれた先に足場がなければ（裏面の板の上）、落ちてしまうので戻せない
-  if (carried && !heroSupported(w, res.x, res.y, mask2)) return { ok: false, why: 'void' };
-  return { ok: true, carried, nx: res.x, y: res.y };
+  // 乗っていても必ず戻せる。戻した紙が体に重なるなら持ち上げる（足場がなければ、そのまま落ちる）
+  let res = resolveFit(w, carried ? 2 * fd.f - x : x, y, mask2);
+  let moved = carried;
+  if (!res) { res = resolveFit(w, x, y, mask2) || { x, y }; moved = false; }   // 運ばれる先が紙でふさがれているときは、その場に残って足場だけが動く
+  return { ok: true, carried: moved, nx: res.x, y: res.y };
 }
 
 // 次に折りたい折り目 j を、前の折りを自動で戻しながら折る計画
