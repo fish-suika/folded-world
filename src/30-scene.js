@@ -1,9 +1,9 @@
 // ===== 3D 描画（three.js r128）。判定は 20-logic.js の2Dマス目、ここは見た目だけ =====
 const GAME3D = (function () {
-  let renderer, scene, camera, sun, container, levelRoot;
+  let renderer, scene, camera, sun, hemi, container, levelRoot, bgRoot;
   let heroRoot, heroBody, heroTail;
   let foldGroups = [], markers = [], backMeshes = [], shardMeshes = [], spikeMeshes = [], flagMeshes = [], flag, flagGlow;
-  let camX = 0, camY = 6;
+  let camX = 0, camY = 6, bigShard = null;
   const D = 0.5;            // 紙の厚み（奥行き）
 
   // ---- 紙のテクスチャ（繊維とざらつきを canvas で生成） ----
@@ -55,10 +55,12 @@ const GAME3D = (function () {
 
   function buildLevel(world, level) {
     const W = world.W, H = world.H;
+    // 耳のグループ内での位置（折り目を原点にした座標）
+    const loc = (fd, cx, cy) => fd.axis === 'x' ? [cx + 0.5 - fd.f, cy + 0.5] : [cx + 0.5, cy + 0.5 - fd.f];
     const inFold = (cx, cy) => world.folds.findIndex(fd => world.inSource(fd, cx, cy));
     foldGroups = world.folds.map(fd => {
       const g = new THREE.Group();
-      g.position.set(fd.f, 0, 0);       // 折り目を軸に回る
+      g.position.set(fd.axis === 'x' ? fd.f : 0, fd.axis === 'y' ? fd.f : 0, 0);       // 折り目を軸に回る
       levelRoot.add(g);
       return g;
     });
@@ -69,12 +71,12 @@ const GAME3D = (function () {
       const m = isTab ? cellMesh(M.tab, M.tabBack) : (cy >= 2 ? cellMesh(M.wall, M.wallBack) : cellMesh(M.ground, M.groundBack));
       if (isTab) m.scale.z = 0.92;
       const open = !world.baseSolid(cx, cy + 1);
-      if (isTab) m.position.set(cx + 0.5 - world.folds[fi].f, cy + 0.5, 0);
+      if (isTab) { const p = loc(world.folds[fi], cx, cy); m.position.set(p[0], p[1], 0); }
       else m.position.set(cx + 0.5, cy + 0.5, 0);
       (isTab ? foldGroups[fi] : levelRoot).add(m);
       if (open) {
         const cap = new THREE.Mesh(capGeo, isTab ? M.capTab : M.cap);
-        cap.position.set(m.position.x, cy + 0.9, 0);
+        cap.position.set(m.position.x, m.position.y + 0.4, 0);
         cap.receiveShadow = true;
         (isTab ? foldGroups[fi] : levelRoot).add(cap);
       }
@@ -83,7 +85,7 @@ const GAME3D = (function () {
     backMeshes = [];
     world.folds.forEach((fd, i) => {
       const g = foldGroups[i];
-      const cxm = (fd.x0 + fd.x1) / 2 - fd.f, cym = (fd.y0 + fd.y1) / 2;
+      const lc = loc(fd, (fd.x0 + fd.x1) / 2 - 0.5, (fd.y0 + fd.y1) / 2 - 0.5), cxm = lc[0], cym = lc[1];
       const gw = fd.x1 - fd.x0, gh = fd.y1 - fd.y0;
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(gw, gh), M.ghost);
       plane.position.set(cxm, cym, D / 2 + 0.03);
@@ -95,11 +97,11 @@ const GAME3D = (function () {
         const cx = k % W, cy = Math.floor(k / W);
         const m = cellMesh(M.tabBack, M.tabBack);
         m.scale.z = 0.92;
-        m.position.set(cx + 0.5 - fd.f, cy + 0.5, 0);
+        { const p = loc(fd, cx, cy); m.position.set(p[0], p[1], 0); }
         g.add(m); list.push(m);
         if (!fd.back.has((cy + 1) * W + cx)) {
           const cap = new THREE.Mesh(capGeo, M.capBack);
-          cap.position.set(m.position.x, cy + 0.9, 0);
+          cap.position.set(m.position.x, m.position.y + 0.4, 0);
           g.add(cap); list.push(cap);
         }
       });
@@ -109,11 +111,19 @@ const GAME3D = (function () {
     markers = world.folds.map(fd => {
       const g = new THREE.Group();
       const m = new THREE.MeshBasicMaterial({ color: 0x8a7a66 });
-      const top = fd.y1 + 1.4, bot = fd.y0 - 0.2;
-      for (let y = bot; y < top; y += 0.55) {
-        const d = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), m);
-        d.position.set(fd.f, y + 0.16, D / 2 + 0.06);
-        g.add(d);
+      if (fd.axis === 'x') {
+        const top = fd.y1 + 1.4, bot = fd.y0 - 0.2;
+        for (let y = bot; y < top; y += 0.55) {
+          const d = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), m);
+          d.position.set(fd.f, y + 0.16, D / 2 + 0.06);
+          g.add(d);
+        }
+      } else {
+        for (let x = fd.x0 - 0.5; x < fd.x1 + 0.5; x += 0.55) {
+          const d = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.1, 0.1), m);
+          d.position.set(x + 0.16, fd.f, D / 2 + 0.06);
+          g.add(d);
+        }
       }
       g.userData.mat = m;
       levelRoot.add(g);
@@ -127,7 +137,7 @@ const GAME3D = (function () {
         const c = new THREE.Mesh(spikeGeo, M.spike);
         c.position.set(-0.25 + k * 0.5, 0.275, 0); c.castShadow = true; g.add(c);
       }
-      if (fi >= 0) { g.position.set(sp.cx + 0.5 - world.folds[fi].f, sp.cy, 0); foldGroups[fi].add(g); }
+      if (fi >= 0) { const p = loc(world.folds[fi], sp.cx, sp.cy); g.position.set(p[0], p[1] - 0.5, 0); foldGroups[fi].add(g); }
       else { g.position.set(sp.cx + 0.5, sp.cy, 0); levelRoot.add(g); }
       return { g, sp, fi };
     });
@@ -136,7 +146,7 @@ const GAME3D = (function () {
       const fi = s.back >= 0 ? s.back : inFold(s.cx, s.cy);
       const m = new THREE.Mesh(shardGeo, M.shard);
       m.scale.set(1, 1.3, 0.45); m.castShadow = true;
-      if (fi >= 0) { m.position.set(s.cx + 0.5 - world.folds[fi].f, s.cy + 0.5, 0); foldGroups[fi].add(m); }
+      if (fi >= 0) { const p = loc(world.folds[fi], s.cx, s.cy); m.position.set(p[0], p[1], 0); foldGroups[fi].add(m); }
       else { m.position.set(s.cx + 0.5, s.cy + 0.5, 0); levelRoot.add(m); }
       return { m, s, fi };
     });
@@ -164,6 +174,11 @@ const GAME3D = (function () {
     flagGlow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.35 }));
     flagGlow.position.set(0.5, 1.8, -0.2);
     flag.add(pole, cloth, flagGlow);
+    if (level.big) {
+      bigShard = new THREE.Mesh(new THREE.OctahedronGeometry(0.75), M.shard);
+      bigShard.scale.set(1, 1.35, 0.5); bigShard.position.set(0.2, 4.0, 0); bigShard.castShadow = true;
+      flag.add(bigShard);
+    } else bigShard = null;
     flag.position.set(level.goal.x, level.goal.y, 0);
     flag.userData.cloth = cloth;
     levelRoot.add(flag);
@@ -177,7 +192,7 @@ const GAME3D = (function () {
     s.lineTo(x1, -30); s.closePath();
     const m = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color, map: TEX.b }));
     m.position.z = z;
-    scene.add(m);
+    bgRoot.add(m);
   }
   function cloud(x, y, z, sc) {
     const g = new THREE.Group();
@@ -185,7 +200,7 @@ const GAME3D = (function () {
     [[0, 0, 1.6], [1.5, 0.3, 1.2], [-1.5, 0.2, 1.1], [0.6, 0.9, 1.0]].forEach(([dx, dy, r]) => {
       const c = new THREE.Mesh(new THREE.CircleGeometry(r, 20), mt); c.position.set(dx, dy, 0); g.add(c);
     });
-    g.position.set(x, y, z); g.scale.setScalar(sc); scene.add(g);
+    g.position.set(x, y, z); g.scale.setScalar(sc); bgRoot.add(g);
   }
   function tree(x, z, sc, col) {
     const g = new THREE.Group();
@@ -197,15 +212,40 @@ const GAME3D = (function () {
       const t = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color: col, map: TEX.a }));
       t.position.set(0, 0.7 + i * 0.75, 0.01 * i); g.add(t);
     }
-    g.position.set(x, 2, z); g.scale.setScalar(sc); scene.add(g);
+    g.position.set(x, 2, z); g.scale.setScalar(sc); bgRoot.add(g);
   }
-  function buildBackdrop() {
-    hill(0xcfe9d4, -26, 4.5, 3.2, 0.11, 0.5, -40, 130);
-    hill(0xb5dcb8, -18, 3.2, 2.6, 0.16, 2.0, -40, 130);
-    hill(0x9ccf9e, -11, 2.4, 1.8, 0.22, 4.2, -40, 130);
-    [[6, 11, -22, 1.4], [26, 12.5, -24, 1.7], [48, 10.5, -20, 1.3], [66, 12, -25, 1.8], [-8, 12, -23, 1.5], [86, 11, -22, 1.5]].forEach(a => cloud(...a));
-    const cols = [0x5aa96a, 0x7bc27f];
-    for (let i = 0; i < 26; i++) tree(2 + i * 3.1 + (i % 3) * 0.7, -2.4 - (i % 4) * 0.4, 1.0 + (i % 5) * 0.12, cols[i % 2]);
+  const THEMES = {
+    meadow: { sky: 'linear-gradient(#bfe6ff 0%,#e9f6ff 55%,#fff3d6 100%)', ground: 0x93d38c, groundBack: 0x6fae7a, cap: 0x5fb86a, wall: 0x8ec5ee, wallBack: 0x6a9fcf,
+              hills: [0xcfe9d4, 0xb5dcb8, 0x9ccf9e], trees: [0x5aa96a, 0x7bc27f], hemi: [0xffffff, 0xb8d8b0, 0.78], sun: 0xfff0d0 },
+    sunset: { sky: 'linear-gradient(#ff9d73 0%,#ffc79a 50%,#ffe9c2 100%)', ground: 0xf2b184, groundBack: 0xcf8a62, cap: 0xd9783a, wall: 0xe98fa0, wallBack: 0xc26e82,
+              hills: [0xf8cdb0, 0xf0ab94, 0xdc8b7c], trees: [0xc4654f, 0xe28a6a], hemi: [0xfff1e0, 0xd9a98c, 0.82], sun: 0xffd9a8 },
+    night:  { sky: 'linear-gradient(#141a48 0%,#2f3a7a 55%,#5a5aa8 100%)', ground: 0x5b6dbc, groundBack: 0x434f94, cap: 0x8b9af0, wall: 0x7a64b8, wallBack: 0x5a4a96,
+              hills: [0x4a549a, 0x38417f, 0x2c3468], trees: [0x3f4ea6, 0x4a9fb4], hemi: [0xc2c9ff, 0x4a5090, 0.8], sun: 0xc6ccff, stars: true },
+    gold:   { sky: 'linear-gradient(#ffe27a 0%,#fff0b8 55%,#ffffff 100%)', ground: 0xf6d568, groundBack: 0xd9b33f, cap: 0xe8a820, wall: 0xffb86b, wallBack: 0xd9904a,
+              hills: [0xfff0c0, 0xffe39a, 0xffd37a], trees: [0xe0a33a, 0xf2c25a], hemi: [0xffffff, 0xffe6a0, 0.85], sun: 0xfff4d0 },
+  };
+  function applyTheme(name) {
+    const t = THEMES[name] || THEMES.meadow;
+    M.ground.color.setHex(t.ground); M.groundBack.color.setHex(t.groundBack); M.cap.color.setHex(t.cap);
+    M.wall.color.setHex(t.wall); M.wallBack.color.setHex(t.wallBack);
+    hemi.color.setHex(t.hemi[0]); hemi.groundColor.setHex(t.hemi[1]); hemi.intensity = t.hemi[2];
+    sun.color.setHex(t.sun);
+    container.parentElement.style.background = t.sky;
+    while (bgRoot.children.length) bgRoot.remove(bgRoot.children[0]);
+    hill(t.hills[0], -26, 4.5, 3.2, 0.11, 0.5, -40, 150);
+    hill(t.hills[1], -18, 3.2, 2.6, 0.16, 2.0, -40, 150);
+    hill(t.hills[2], -11, 2.4, 1.8, 0.22, 4.2, -40, 150);
+    if (t.stars) {
+      const sm = new THREE.MeshBasicMaterial({ color: 0xffe9a0 });
+      for (let i = 0; i < 70; i++) {
+        const s = new THREE.Mesh(new THREE.CircleGeometry(0.12 + (i % 4) * 0.05, 5), sm);
+        s.position.set(-10 + (i * 37) % 130, 6 + (i * 53) % 12, -30);
+        bgRoot.add(s);
+      }
+    } else {
+      [[6, 11, -22, 1.4], [26, 12.5, -24, 1.7], [48, 10.5, -20, 1.3], [66, 12, -25, 1.8], [-8, 12, -23, 1.5], [86, 11, -22, 1.5], [108, 12, -24, 1.6]].forEach(a => cloud(...a));
+    }
+    for (let i = 0; i < 40; i++) tree(2 + i * 3.1 + (i % 3) * 0.7, -2.4 - (i % 4) * 0.4, 1.0 + (i % 5) * 0.12, t.trees[i % 2]);
   }
 
   // ---- 主人公：折り紙のキツネ「カミ」 ----
@@ -245,7 +285,7 @@ const GAME3D = (function () {
     container.appendChild(renderer.domElement);
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(CFG.cam.fov, 16 / 9, 0.5, 200);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xb8d8b0, 0.78));
+    hemi = new THREE.HemisphereLight(0xffffff, 0xb8d8b0, 0.78); scene.add(hemi);
     sun = new THREE.DirectionalLight(0xfff0d0, 0.85);
     sun.position.set(-8, 18, 16);
     sun.castShadow = true;
@@ -254,7 +294,7 @@ const GAME3D = (function () {
     sun.shadow.bias = -0.0005;
     scene.add(sun); scene.add(sun.target);
     makeMaterials();
-    buildBackdrop();
+    bgRoot = new THREE.Group(); scene.add(bgRoot);
     buildHero();
     levelRoot = new THREE.Group();
     scene.add(levelRoot);
@@ -265,6 +305,7 @@ const GAME3D = (function () {
   // ステージを読み込む（前のステージの見た目を捨てる）
   function load(world, level) {
     while (levelRoot.children.length) levelRoot.remove(levelRoot.children[0]);
+    applyTheme(level.theme);
     buildLevel(world, level);
     camX = level.start.x; camY = CFG.cam.minY;
   }
@@ -285,15 +326,16 @@ const GAME3D = (function () {
     const prog = [];
     for (let i = 0; i < foldGroups.length; i++) {
       const fd = world.folds[i];
-      let p = world.active === i ? 1 : 0;
+      let p = world.isOn(i) ? 1 : 0;
       if (anim && anim.i === i) { const e = ease(anim.t / CFG.fold.dur); p = anim.fold ? e : 1 - e; }
       prog[i] = p;
-      let rot = -fd.dir * Math.PI * p;
-      if (shake && shake.i === i) rot += Math.sin(shake.t * 70) * 0.07 * (1 - shake.t / CFG.fold.shakeDur) * -fd.dir;
-      foldGroups[i].rotation.y = rot;
+      const sgn = fd.axis === 'x' ? -fd.dir : fd.dir;
+      let rot = sgn * Math.PI * p;
+      if (shake && shake.i === i) rot += Math.sin(shake.t * 70) * 0.07 * (1 - shake.t / CFG.fold.shakeDur) * sgn;
+      if (fd.axis === 'x') foldGroups[i].rotation.y = rot; else foldGroups[i].rotation.x = rot;
       // 折り目の点線：候補は金色に脈打つ
       const mk = markers[i].userData.mat;
-      const hot = st.candidate === i || world.active === i;
+      const hot = st.candidate === i || world.isOn(i);
       mk.color.setHex(hot ? (Math.sin(st.time * 8) > 0 ? 0xffa800 : 0xff6a00) : 0x8a7a66);
       // 裏面の足場は、半分以上めくれてから現れる（紙の裏側が見えるのと同じ）
       const showBack = p > 0.5;
@@ -336,6 +378,7 @@ const GAME3D = (function () {
     heroTail.rotation.z = Math.sin(st.time * (6 + speed)) * 0.25 + (hero.ground ? 0 : 0.35);
     // ゴール
     flag.userData.cloth.rotation.y = Math.sin(st.time * 3) * 0.25;
+    if (bigShard) { bigShard.rotation.y = st.time * 1.6; bigShard.position.y = 4.0 + Math.sin(st.time * 2) * 0.2; }
     flagGlow.scale.setScalar(1 + Math.sin(st.time * 3) * 0.08);
     // カメラ
     const half = world.W / 2;

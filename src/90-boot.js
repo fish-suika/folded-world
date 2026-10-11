@@ -1,24 +1,40 @@
 // ===== ゲーム本体（状態・ループ・保存） =====
 const SAVE_KEY = 'foldedWorld.save.v1';
 function loadSave() {
-  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.stages) return s; } catch (e) {}
-  return { stages: {} };
+  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.stages) { s.abilities = s.abilities || {}; return s; } } catch (e) {}
+  return { stages: {}, abilities: {} };
 }
 function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) {} }
 let save = loadSave();
 
+const WORLD_NAME = { 1: 'ワールド1　草原の紙', 2: 'ワールド2　夕やけの紙', 3: 'ワールド3　夜の紙', 4: '最終ステージ', 5: 'ひみつ' };
+const ABILITY_TEXT = {
+  yfold: '新しい能力「横の折り目」を手に入れた！<br>高い足場を折り下ろしたり、崖を低くできる。',
+  double: '新しい能力「二重折り」を手に入れた！<br>2か所を同時に折れる。（U / Shift で戻す）',
+  final: '最後の大きな欠片を手に入れた！<br>最終ステージが開いた。',
+};
+const totalShards = () => Object.values(save.stages).reduce((n, s) => n + s.shards.filter(Boolean).length, 0);
+const cleared = id => !!(save.stages[id] && save.stages[id].clear);
+function unlocked(lv) {
+  if (lv.needShards) return totalShards() >= lv.needShards;
+  if (lv.world === 2) return cleared('1-3');
+  if (lv.world === 3) return cleared('2-3');
+  if (lv.world === 4) return cleared('3-3');
+  return true;
+}
+
 let stageIdx = 0, level = LEVELS[0], world = new World(level);
 let hero = newHero(level);
-let state = 'title';          // title | select | play | pause | clear
+let state = 'title';          // title | select | play | pause | clear | ending
 let anim = null;              // { i, fold, t, carried, x0, x1 }
 let shake = null;             // { i, t }
 let time = 0, clock = 0, foldCount = 0, squash = 0, candidate = -1;
-let got = [], flagsHit = [], cp = null, deadT = 0, deaths = 0;
+let got = [], flagsHit = [], cp = null, deadT = 0, deaths = 0, foldStack = [];
 
 GAME3D.init($('view'));
 
 function resetRun() {
-  world.active = -1; anim = null; shake = null; deadT = 0;
+  world.mask = 0; anim = null; shake = null; deadT = 0; foldStack = [];
   hero = newHero(level);
   got = world.shards.map(() => false);
   flagsHit = world.flags.map(() => false);
@@ -30,13 +46,15 @@ function loadStage(i) {
   GAME3D.load(world, level);
   resetRun();
   HUD.stage(level.id + '　' + level.name);
+  document.body.classList.toggle('double', world.maxFolds > 1);
 }
 function enterPlay() { state = 'play'; HUD.show(null); HUD.playing(true); }
 function startStage(i) { loadStage(i); enterPlay(); }
 
 function respawn() {   // 落ちる・トゲ → 最後に取った旗から。折りも旗を取った時点に戻す
   deaths++;
-  world.active = cp ? cp.active : -1;
+  world.mask = cp ? cp.mask : 0;
+  foldStack = cp ? cp.stack.slice() : [];
   anim = null; shake = null;
   hero = newHero(level, cp ? { x: cp.x, y: cp.y } : null);
   deadT = 0.35;
@@ -55,16 +73,27 @@ onRetry = () => { if (state === 'play' || state === 'pause') { resetRun(); enter
 function showSelect() {
   state = 'select'; HUD.playing(false);
   const box = $('cards'); box.innerHTML = '';
-  LEVELS.forEach((lv, i) => {
-    const sv = save.stages[lv.id];
-    const b = document.createElement('button');
-    b.className = 'card' + (sv && sv.clear ? ' done' : '');
-    const n = sv ? sv.shards.filter(Boolean).length : 0;
-    const stars = '◆'.repeat(n) + '◇'.repeat(lv.shards.length - n);
-    b.innerHTML = `<b>${lv.id}</b><span class="nm">${lv.name}</span><span class="ht">${lv.hint}</span>` +
-      `<span class="st">${stars}</span><span class="ht">${sv && sv.clear ? 'クリア　' + sv.best.toFixed(1) + ' 秒' : '未クリア'}</span>`;
-    b.addEventListener('click', () => { if (INPUT.touch) tryLandscape(); startStage(i); });
-    box.appendChild(b);
+  const worlds = [1, 2, 3, 4, 5];
+  worlds.forEach(wn => {
+    const list = LEVELS.map((lv, i) => ({ lv, i })).filter(e => e.lv.world === wn);
+    if (!list.length) return;
+    const row = document.createElement('div'); row.className = 'wrow';
+    const lab = document.createElement('div'); lab.className = 'wlab'; lab.textContent = WORLD_NAME[wn];
+    row.appendChild(lab);
+    list.forEach(({ lv, i }) => {
+      const sv = save.stages[lv.id];
+      const ok = unlocked(lv);
+      const b = document.createElement('button');
+      b.className = 'card' + (sv && sv.clear ? ' done' : '') + (ok ? '' : ' lock');
+      const n = sv ? sv.shards.filter(Boolean).length : 0;
+      const stars = '◆'.repeat(n) + '◇'.repeat(lv.shards.length - n);
+      let info = sv && sv.clear ? 'クリア　' + sv.best.toFixed(1) + ' 秒' : '未クリア';
+      if (!ok) info = lv.needShards ? `小さな欠片 ${lv.needShards} 個で開く（いま ${totalShards()}）` : '前のワールドをクリアで開く';
+      b.innerHTML = `<b>${lv.id}</b><span class="nm">${ok ? lv.name : '？？？'}</span><span class="st">${stars}</span><span class="ht">${info}</span>`;
+      if (ok) b.addEventListener('click', () => { if (INPUT.touch) tryLandscape(); startStage(i); });
+      row.appendChild(b);
+    });
+    box.appendChild(row);
   });
   HUD.show('scSelect');
 }
@@ -74,43 +103,59 @@ $('btnResume').addEventListener('click', () => pause(false));
 $('btnRetry').addEventListener('click', () => onRetry());
 $('btnToSelect1').addEventListener('click', showSelect);
 $('btnToSelect2').addEventListener('click', showSelect);
+$('btnEndSel').addEventListener('click', showSelect);
 $('btnAgain').addEventListener('click', () => startStage(stageIdx));
-$('btnNext').addEventListener('click', () => startStage(Math.min(stageIdx + 1, LEVELS.length - 1)));
+$('btnNext').addEventListener('click', () => {
+  let n = stageIdx + 1;
+  while (n < LEVELS.length && (!unlocked(LEVELS[n]) || LEVELS[n].needShards)) n++;
+  startStage(n < LEVELS.length ? n : stageIdx);
+});
 
 const WHY = {
   overlap: '紙が重なって折れない', onTab: '乗っている紙は折れない', void: '戻すと足場がなくなる',
+  compat: 'その折りとは同時に折れない', onLayer: '乗っている紙は戻せない', max: 'これ以上は同時に折れない',
 };
 
+function startFold(i) { anim = { i, fold: true, t: 0, carried: false, x0: hero.x, x1: hero.x }; foldCount++; }
+function startUnfold(i) {
+  const r = canUnfold(world, i, hero.x, hero.y);
+  if (r.ok) { anim = { i, fold: false, t: 0, carried: r.carried, x0: hero.x, x1: r.nx }; return true; }
+  shake = { i, t: 0 }; HUD.toast(WHY[r.why] || '紙が重なって戻せない');
+  return false;
+}
+
+// F：いちばん近い「折れる」折り目を折る。なければ、いちばん新しく折ったものを戻す。U / Shift：戻す
 function tryFold() {
   if (anim || !hero.ground) return;
-  if (world.active >= 0) {
-    const r = canUnfold(world, hero.x, hero.y);
-    if (r.ok) { anim = { i: world.active, fold: false, t: 0, carried: r.carried, x0: hero.x, x1: r.nx }; }
-    else { shake = { i: world.active, t: 0 }; HUD.toast(r.why === 'void' ? WHY.void : '紙が重なって戻せない'); }
-    return;
-  }
   let best = -1, bestD = 1e9, blocked = -1, why = '';
   for (let i = 0; i < world.folds.length; i++) {
-    const r = canFold(world, i, hero.x, hero.y), d = Math.abs(hero.x - world.folds[i].f);
+    if (world.isOn(i)) continue;
+    const r = canFold(world, i, hero.x, hero.y), d = hingeDist(world.folds[i], hero.x, hero.y);
     if (r.ok) { if (d < bestD) { bestD = d; best = i; } }
-    else if ((r.why === 'overlap' || r.why === 'onTab') && blocked < 0) { blocked = i; why = r.why; }
+    else if (['overlap', 'onTab', 'compat'].includes(r.why) && blocked < 0) { blocked = i; why = r.why; }
   }
-  if (best >= 0) { anim = { i: best, fold: true, t: 0, carried: false, x0: hero.x, x1: hero.x }; foldCount++; }
-  else if (blocked >= 0) { shake = { i: blocked, t: 0 }; HUD.toast(WHY[why]); }
+  if (best >= 0) { startFold(best); return; }
+  if (foldStack.length) { startUnfold(foldStack[foldStack.length - 1]); return; }
+  if (blocked >= 0) { shake = { i: blocked, t: 0 }; HUD.toast(WHY[why]); }
+}
+function tryUnfold() {
+  if (anim || !hero.ground || !foldStack.length) return;
+  startUnfold(foldStack[foldStack.length - 1]);
 }
 
 function updateCandidate() {
   candidate = -1;
   if (anim) return;
-  if (world.active >= 0) { candidate = world.active; return; }
   let bestD = 1e9;
   for (let i = 0; i < world.folds.length; i++) {
+    if (world.isOn(i)) continue;
     const r = canFold(world, i, hero.x, hero.y);
-    if (r.ok || r.why === 'overlap' || r.why === 'onTab') {
-      const d = Math.abs(hero.x - world.folds[i].f);
+    if (r.ok || ['overlap', 'onTab', 'compat'].includes(r.why)) {
+      const d = hingeDist(world.folds[i], hero.x, hero.y);
       if (d < bestD) { bestD = d; candidate = i; }
     }
   }
+  if (candidate < 0 && foldStack.length) candidate = foldStack[foldStack.length - 1];
 }
 
 function collectItems() {
@@ -125,7 +170,7 @@ function collectItems() {
     if (flagsHit[i] || !hero.ground || anim) return;
     if (Math.hypot(f.x - hero.x, f.y + 0.5 - cy) < CFG.item.flagR) {
       flagsHit[i] = true;
-      cp = { x: f.x, y: f.y, active: world.active };
+      cp = { x: f.x, y: f.y, mask: world.mask, stack: foldStack.slice() };
       HUD.toast('チェックポイント');
     }
   });
@@ -139,10 +184,17 @@ function clearStage() {
     clear: true, best: Math.min(old.best, time),
     shards: level.shards.map((_, i) => !!(old.shards[i] || got[i])),
   };
+  let abilityMsg = '';
+  if (level.big) { save.abilities[level.big] = true; abilityMsg = '<br><br>◆◆◆ ' + ABILITY_TEXT[level.big] + ' ◆◆◆'; }
   writeSave(save);
-  $('clearInfo').innerHTML = `${level.id} ${level.name}<br>タイム ${time.toFixed(1)} 秒　／　折った回数 ${foldCount} 回<br>小さな欠片 ${n}/${level.shards.length}　／　やり直し ${deaths} 回`;
-  $('btnNext').style.display = stageIdx < LEVELS.length - 1 ? '' : 'none';
-  HUD.show('scClear');
+  $('clearInfo').innerHTML = `${level.id} ${level.name}<br>タイム ${time.toFixed(1)} 秒　／　折った回数 ${foldCount} 回<br>小さな欠片 ${n}/${level.shards.length}　／　やり直し ${deaths} 回${abilityMsg}`;
+  const hasNext = LEVELS.some((lv, i) => i > stageIdx && unlocked(lv) && !lv.needShards);
+  $('btnNext').style.display = hasNext && !level.final ? '' : 'none';
+  if (level.final) {
+    const sum = Object.values(save.stages).reduce((t, s) => t + (s.clear ? s.best : 0), 0);
+    $('endInfo').innerHTML = `最終ステージ クリア！<br>小さな欠片 ${totalShards()} / ${LEVELS.reduce((a, l) => a + l.shards.length, 0)}　／　最短タイムの合計 ${sum.toFixed(1)} 秒`;
+    HUD.show('scEnding'); state = 'ending';
+  } else HUD.show('scClear');
 }
 
 function update(dt) {
@@ -151,12 +203,14 @@ function update(dt) {
   if (anim) {
     anim.t += dt;
     if (anim.t >= CFG.fold.dur) {
-      world.active = anim.fold ? anim.i : -1;
+      if (anim.fold) { world.mask |= 1 << anim.i; foldStack.push(anim.i); }
+      else { world.mask &= ~(1 << anim.i); foldStack = foldStack.filter(k => k !== anim.i); }
       if (anim.carried) { hero.x = anim.x1; hero.vx = 0; hero.vy = 0; }
       anim = null;
     }
   } else {
-    if (INPUT.foldPressed) tryFold();
+    if (INPUT.unfoldPressed) tryUnfold();
+    else if (INPUT.foldPressed) tryFold();
     if (!anim) {
       stepHero(world, hero, INPUT, dt);
       if (hero.landed) squash = Math.max(squash, hero.landed);
@@ -167,17 +221,19 @@ function update(dt) {
       }
     }
   }
-  INPUT.foldPressed = false; INPUT.jumpPressed = false;
+  INPUT.foldPressed = false; INPUT.unfoldPressed = false; INPUT.jumpPressed = false;
   if (shake) { shake.t += dt; if (shake.t > CFG.fold.shakeDur) shake = null; }
   squash = Math.max(0, squash - dt * 5);
   updateCandidate();
   // ガイド表示
   if (anim) HUD.prompt('');
-  else if (world.active >= 0) {
-    const r = canUnfold(world, hero.x, hero.y);
-    HUD.prompt(r.ok ? (r.carried ? 'F：元に戻す（紙ごと運ばれる）' : 'F：元に戻す') : (r.why === 'void' ? WHY.void : '重なっていて戻せない'), !r.ok);
-  } else if (candidate >= 0) { const r = canFold(world, candidate, hero.x, hero.y); HUD.prompt(r.ok ? 'F：折る' : WHY[r.why], !r.ok); }
-  else HUD.prompt('');
+  else if (candidate >= 0 && !world.isOn(candidate)) {
+    const r = canFold(world, candidate, hero.x, hero.y);
+    HUD.prompt(r.ok ? 'F：折る' : WHY[r.why], !r.ok);
+  } else if (foldStack.length) {
+    const top = foldStack[foldStack.length - 1], r = canUnfold(world, top, hero.x, hero.y);
+    HUD.prompt(r.ok ? (r.carried ? 'F：元に戻す（紙ごと運ばれる）' : 'F：元に戻す') : WHY[r.why] || '重なっていて戻せない', !r.ok);
+  } else HUD.prompt('');
   HUD.canFold(!anim && candidate >= 0);
   HUD.time(time);
   HUD.shards(got.filter(Boolean).length, got.length);
@@ -199,4 +255,4 @@ loadStage(0);
 requestAnimationFrame(frame);
 
 // 検証用に外から見られるようにしておく（遊びには影響しない）
-window.__game = { get world() { return world; }, get hero() { return hero; }, get state() { return state; }, get got() { return got; }, startStage, LEVELS };
+window.__game = { get world() { return world; }, get hero() { return hero; }, get state() { return state; }, get got() { return got; }, startStage, showSelect, LEVELS, get save() { return save; } };

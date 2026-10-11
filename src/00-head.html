@@ -28,13 +28,16 @@
   #tagStage{left:2.2cqw}
   #tagTime{right:2.2cqw;font-variant-numeric:tabular-nums}
   #tagShard{right:15cqw;color:#9a6b00}
-  .cards{display:flex;gap:2.2cqw;margin-top:.5cqw}
-  .card{width:23cqw;padding:1.6cqw 1.2cqw;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
+  .cards{display:flex;flex-direction:column;gap:1.1cqw;margin-top:.2cqw}
+  .wrow{display:flex;gap:1.4cqw;align-items:stretch;justify-content:center}
+  .wlab{width:13cqw;display:flex;align-items:center;justify-content:center;font-size:1.7cqw;font-weight:700;letter-spacing:.06em;line-height:1.5}
+  .card{width:20cqw;padding:.7cqw .8cqw;border:0;border-radius:2cqw;background:#fff;color:var(--ink);box-shadow:0 .6cqw 0 #cfc3a8;text-align:center;line-height:1.7}
   .card:active{transform:translateY(.4cqw);box-shadow:0 .2cqw 0 #cfc3a8}
-  .card b{display:block;font-size:2.8cqw;letter-spacing:.1em}
-  .card .nm{display:block;font-size:2.3cqw;font-weight:700}
-  .card .ht{display:block;font-size:1.5cqw;opacity:.7;min-height:3.2cqw}
-  .card .st{display:block;font-size:1.8cqw;color:#9a6b00;letter-spacing:.1em}
+  .card b{display:inline;font-size:1.9cqw;letter-spacing:.08em;margin-right:.6cqw}
+  .card .nm{display:inline;font-size:1.8cqw;font-weight:700}
+  .card .ht{display:block;font-size:1.25cqw;opacity:.7}
+  .card .st{display:block;font-size:1.5cqw;color:#9a6b00;letter-spacing:.1em}
+  .card.lock{opacity:.45;box-shadow:none;cursor:default}
   .card.done{background:#fff7da}
   #prompt{position:absolute;left:50%;top:13cqh;transform:translateX(-50%);font-size:2.4cqw;font-weight:800;letter-spacing:.1em;
     padding:.8cqw 2.4cqw;border-radius:3cqw;background:var(--gold);color:#4a2d00;box-shadow:0 .4cqw 0 #c47f00;display:none;white-space:nowrap}
@@ -64,6 +67,8 @@
   .tb{position:absolute;bottom:4cqh;width:12cqh;height:12cqh;border-radius:50%;border:0;pointer-events:auto;
     background:rgba(251,244,226,.72);color:var(--ink);font-size:3.4cqh;font-weight:800;box-shadow:0 .8cqh 0 rgba(74,59,46,.25)}
   .tb.down{background:var(--gold)}
+  #bU{display:none;right:calc(3cqw + 29cqh);font-size:2.6cqh}
+  body.double #bU{display:block}
   #bL{left:3cqw}#bR{left:calc(3cqw + 14.5cqh)}
   #bJ{right:3cqw}#bF{right:calc(3cqw + 14.5cqh);font-size:3cqh}
   body.canfold #bF{background:var(--gold);animation:pulse .8s ease-in-out infinite}
@@ -93,19 +98,25 @@
   </div>
   <div id="touch">
     <button class="tb" id="bL">◀</button><button class="tb" id="bR">▶</button>
-    <button class="tb" id="bF">折る</button><button class="tb" id="bJ">跳ぶ</button>
+    <button class="tb" id="bU">戻す</button><button class="tb" id="bF">折る</button><button class="tb" id="bJ">跳ぶ</button>
   </div>
 
   <div class="screen on" id="scTitle">
     <h1>折りたたまれた世界</h1>
     <p>紙の世界を折って、道を作ろう。<br>折り目（点線）の近くで「折る」と、紙がパタンと反対側にかさなる。</p>
     <div class="row"><button class="btn" id="btnStart">はじめる</button></div>
-    <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
+    <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>U</kbd> / <kbd>Shift</kbd> 戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
   </div>
   <div class="screen" id="scSelect">
     <h2>ワールド1　草原の紙</h2>
     <div class="cards" id="cards"></div>
     <small>小さな欠片は ◆ で数える（集めなくてもクリアできる）</small>
+  </div>
+  <div class="screen" id="scEnding">
+    <h1>おしまい</h1>
+    <p id="endInfo"></p>
+    <small>遊んでくれて ありがとう。<br>小さな欠片を 20 個集めると、ひみつの紙が開く。</small>
+    <div class="row"><button class="btn" id="btnEndSel">ステージ選択へ</button></div>
   </div>
   <div class="screen" id="scPause">
     <h2>ポーズ</h2>

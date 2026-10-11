@@ -99,3 +99,123 @@ const LEVELS = [
     shards: [{ x: 16, y: 7 }, { x: 45, y: 4 }, { x: 61, y: 4 }],
   },
 ];
+
+// ===== ワールド2・3・最終・ひみつ（部品を組み合わせて作る） =====
+// 地面は行 0〜1（上面 y=2）。部品は x 位置を決めて置く。
+const LB = {
+  make(id, name, hint, world, theme, w, opts = {}) {
+    return Object.assign({ id, name, hint, world, theme, w, h: 14, start: { x: 2.5, y: 2 }, rects: [], folds: [], spikes: [], flags: [], shards: [] }, opts);
+  },
+  ground(L, x, w) { L.rects.push([x, 0, w, 2]); },
+  // 向こう岸の地面の表面（行1）を板にして、折り目 f の左側（穴）にかぶせる
+  plankFront(L, f, w) { L.folds.push({ f, w, dir: 1, y0: 1, y1: 2 }); },
+  // 裏面にだけある板（折るまで見えない）
+  plankBack(L, f, w) { L.folds.push({ f, w, dir: 1, y0: 1, y1: 2, back: [[f, 1, w, 1]] }); },
+  // トゲ [s, s+n) と、その右に出っ張りを置き、折ってトゲにかぶせる
+  plate(L, s, n) { L.spikes.push([s, 2, n]); L.rects.push([s + n, 2, n, 1]); L.folds.push({ f: s + n, w: n, dir: 1, y0: 2, y1: 3 }); },
+  // 高い崖（上面 top）。横の折り目（高さ 4）で上を折り下ろすと、上面が 4 になる
+  cliff(L, x, w, top) { L.rects.push([x, 2, w, top - 2]); L.folds.push({ axis: 'y', f: 4, h: top - 4, dir: 1, x0: x, x1: x + w }); },
+  // 空中の足場（2マス幅×n 段）。折り目の高さ 8 で折り下ろすと、上面 4, 6, 8… の階段になる
+  stairs(L, x, n, gRow, gW) {
+    for (let i = 0; i < n; i++) L.rects.push([x + 2 * i, 12 - 2 * i, 2, 1]);
+    L.folds.push({ axis: 'y', f: 8, h: 5, dir: 1, x0: x, x1: x + 2 * n });
+    if (gW > 0) L.rects.push([x + 2 * n, gRow, gW, 1]);
+  },
+};
+
+LEVELS.forEach(l => { l.world = 1; l.theme = 'meadow'; });
+LEVELS[2].big = 'yfold';   // 1-3 のゴールの大きな欠片：横の折り目
+
+(function () {
+  // 2-1 はじめの横折り
+  let L = LB.make('2-1', 'たかさを折る', '横の折り目で、崖を低くする・高い足場を下ろす', 2, 'sunset', 48,
+    { goal: { x: 42.5, y: 8 } });
+  LB.ground(L, 0, 48); LB.cliff(L, 18, 4, 6);
+  L.spikes.push([24, 2, 2]);
+  LB.stairs(L, 28, 2, 7, 12);
+  L.flags = [{ x: 15.5, y: 2 }, { x: 26.5, y: 2 }];
+  L.shards = [{ x: 6, y: 4 }, { x: 20, y: 6 }, { x: 38, y: 10 }];
+  LEVELS.push(L);
+
+  // 2-2 崖と穴
+  L = LB.make('2-2', 'がけと穴', '縦と横の折りを、順番に', 2, 'sunset', 64, { goal: { x: 62.5, y: 8 } });
+  LB.ground(L, 0, 14); LB.ground(L, 22, 42);
+  LB.plankFront(L, 22, 7);
+  LB.cliff(L, 30, 3, 6);
+  LB.plate(L, 40, 3);
+  LB.stairs(L, 50, 2, 7, 10);
+  L.flags = [{ x: 24.5, y: 2 }, { x: 38.5, y: 2 }, { x: 48.5, y: 2 }];
+  L.shards = [{ x: 18, y: 4 }, { x: 31, y: 6 }, { x: 58, y: 10 }];
+  LEVELS.push(L);
+
+  // 2-3 さかさの塔（ワールド2の最後：大きな欠片＝二重折り）
+  L = LB.make('2-3', 'さかさの塔', '板と階段で空へ。最後の塔を低くする', 2, 'sunset', 44, { goal: { x: 39.5, y: 10 }, big: 'double' });
+  LB.ground(L, 0, 8); LB.ground(L, 16, 16);
+  LB.plankFront(L, 16, 7);
+  LB.stairs(L, 18, 3, 7, 9);                  // 階段（3段）と、空中の床 [24, 33)
+  L.rects.push([31, 8, 2, 5]);                // 床の上の塔（行 8〜12）
+  L.folds.push({ axis: 'y', f: 10, h: 3, dir: 1, x0: 31, x1: 33 });   // 塔の上を折り下ろす
+  L.rects.push([33, 9, 8, 1]);                // 塔のむこうの床（上面 10）
+  L.spikes.push([26, 8, 2]);
+  L.flags = [{ x: 24.5, y: 8 }, { x: 34.5, y: 10 }];
+  L.shards = [{ x: 12, y: 4 }, { x: 21, y: 8 }, { x: 37, y: 12 }];
+  LEVELS.push(L);
+
+  // 3-1 ふたつ同時（二重折り）
+  L = LB.make('3-1', 'ふたつ同時', '2か所を同時に折る。裏の板を先に', 3, 'night', 48, { goal: { x: 46.5, y: 2 }, maxFolds: 2 });
+  LB.ground(L, 0, 14); LB.ground(L, 28, 20);
+  LB.plankBack(L, 21, 7);
+  LB.plankFront(L, 28, 7);
+  L.spikes.push([40, 2, 2]);
+  L.flags = [{ x: 36.5, y: 2 }];
+  L.shards = [{ x: 17, y: 4 }, { x: 24, y: 4 }, { x: 43, y: 4 }];
+  LEVELS.push(L);
+
+  // 3-2 橋と階段
+  L = LB.make('3-2', '橋と階段', '板の上で階段を折る', 3, 'night', 48, { goal: { x: 44.5, y: 2 }, maxFolds: 2 });
+  LB.ground(L, 0, 15); LB.ground(L, 22, 26);
+  L.rects.push([24, 2, 5, 4]);
+  LB.plankFront(L, 22, 7);
+  LB.stairs(L, 20, 2, 0, 0);
+  L.spikes.push([32, 2, 2]);
+  L.flags = [{ x: 12.5, y: 2 }, { x: 30.5, y: 2 }];
+  L.shards = [{ x: 17, y: 4 }, { x: 22, y: 7 }, { x: 38, y: 4 }];
+  LEVELS.push(L);
+
+  // 3-3 みっつの橋（ワールド3の最後：大きな欠片）
+  L = LB.make('3-3', 'みっつの橋', '二重の橋、トゲの板、橋と階段', 3, 'night', 72, { goal: { x: 65.5, y: 8 }, maxFolds: 2, big: 'final' });
+  LB.ground(L, 0, 12); LB.ground(L, 24, 24); LB.ground(L, 56, 16);
+  LB.plankBack(L, 18, 6);
+  LB.plankFront(L, 24, 6);
+  LB.plate(L, 32, 4);
+  LB.plankFront(L, 56, 7);
+  LB.stairs(L, 53, 3, 7, 8);
+  L.flags = [{ x: 30.5, y: 2 }, { x: 44.5, y: 2 }];
+  L.shards = [{ x: 15, y: 4 }, { x: 34, y: 5 }, { x: 62, y: 10 }];
+  LEVELS.push(L);
+
+  // 4 おりたたまれた世界（最終ステージ）
+  L = LB.make('4', 'おりたたまれた世界', 'これまでの折りを、すべて使って', 4, 'night', 96, { goal: { x: 92.5, y: 2 }, maxFolds: 2, final: true });
+  LB.ground(L, 0, 10); LB.ground(L, 22, 26); LB.ground(L, 56, 40);
+  LB.plankBack(L, 16, 6);
+  LB.plankFront(L, 22, 6);
+  LB.cliff(L, 30, 3, 6);
+  LB.plate(L, 38, 4);
+  LB.plankFront(L, 56, 7);
+  LB.stairs(L, 53, 3, 7, 10);
+  LB.plate(L, 80, 4);
+  L.flags = [{ x: 28.5, y: 2 }, { x: 35.5, y: 2 }, { x: 46.5, y: 2 }, { x: 72.5, y: 2 }];
+  L.shards = [{ x: 13, y: 4 }, { x: 31, y: 6 }, { x: 62, y: 10 }];
+  LEVELS.push(L);
+
+  // H ひみつの紙（小さな欠片を 20 個集めると開く）
+  L = LB.make('H', 'ひみつの紙', '小さな欠片をたくさん集めた人だけの、おまけ', 5, 'gold', 52, { goal: { x: 48.5, y: 8 }, maxFolds: 2, needShards: 20 });
+  LB.ground(L, 0, 10); LB.ground(L, 22, 30);
+  LB.plankBack(L, 16, 6);
+  LB.plankFront(L, 22, 6);
+  LB.plate(L, 30, 3);
+  LB.stairs(L, 38, 3, 7, 8);
+  L.flags = [{ x: 28.5, y: 2 }, { x: 36.5, y: 2 }];
+  L.shards = [{ x: 13, y: 4 }, { x: 32, y: 4 }, { x: 44, y: 10 }];
+  LEVELS.push(L);
+})();

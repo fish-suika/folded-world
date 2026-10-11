@@ -1,9 +1,9 @@
 // ===== 入力・HUD・画面の出し入れ =====
 const $ = id => document.getElementById(id);
-const INPUT = { left: false, right: false, jumpHeld: false, jumpPressed: false, foldPressed: false, touch: false };
+const INPUT = { left: false, right: false, jumpHeld: false, jumpPressed: false, foldPressed: false, unfoldPressed: false, touch: false };
 const KEYMAP = {
   ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
-  ArrowUp: 'jump', KeyW: 'jump', Space: 'jump', KeyF: 'fold', KeyJ: 'fold',
+  ArrowUp: 'jump', KeyW: 'jump', Space: 'jump', KeyF: 'fold', KeyJ: 'fold', KeyU: 'unfold', ShiftLeft: 'unfold', ShiftRight: 'unfold',
 };
 let onPause = () => {}, onRetry = () => {};
 
@@ -13,6 +13,7 @@ function setKey(code, down) {
   if (a === 'left' || a === 'right') INPUT[a] = down;
   else if (a === 'jump') { if (down && !INPUT.jumpHeld) INPUT.jumpPressed = true; INPUT.jumpHeld = down; }
   else if (a === 'fold') { if (down) INPUT.foldPressed = true; }
+  else if (a === 'unfold') { if (down) INPUT.unfoldPressed = true; }
   return true;
 }
 addEventListener('keydown', e => {
@@ -38,6 +39,7 @@ bindBtn('bL', () => INPUT.left = true, () => INPUT.left = false);
 bindBtn('bR', () => INPUT.right = true, () => INPUT.right = false);
 bindBtn('bJ', () => { if (!INPUT.jumpHeld) INPUT.jumpPressed = true; INPUT.jumpHeld = true; }, () => INPUT.jumpHeld = false);
 bindBtn('bF', () => INPUT.foldPressed = true);
+bindBtn('bU', () => INPUT.unfoldPressed = true);
 addEventListener('touchstart', () => { INPUT.touch = true; document.body.classList.add('touch'); }, { passive: true, once: true });
 if (matchMedia('(pointer: coarse)').matches) { INPUT.touch = true; document.body.classList.add('touch'); }
 
@@ -55,7 +57,7 @@ function tryLandscape() {
 
 const HUD = {
   show(name) {
-    ['scTitle', 'scSelect', 'scPause', 'scClear'].forEach(id => $(id).classList.toggle('on', id === name));
+    ['scTitle', 'scSelect', 'scPause', 'scClear', 'scEnding'].forEach(id => $(id).classList.toggle('on', id === name));
   },
   playing(on) { document.body.classList.toggle('playing', on); },
   stage(txt) { $('tagStage').textContent = txt; },
