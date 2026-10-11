@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>折りたたまれた世界（仮）</title>
+<meta name="description" content="紙の世界を折って道を作る、3D 横スクロールアクション。">
+<meta name="theme-color" content="#1d1a26">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%23ffd76f%27/%3E%3Cpath d=%27M12 14h20v36H12zM32 14l20 8v28l-20-8z%27 fill=%27%23ff8f3a%27/%3E%3Cpath d=%27M32 14v36%27 stroke=%27%238a5a1a%27 stroke-width=%273%27 stroke-dasharray=%274 4%27/%3E%3C/svg%3E">
 <style>
   :root{--ink:#4a3b2e;--paper:#fbf4e2;--gold:#ffb938;--coral:#ff7a5c;--leaf:#5fb86a;--jp:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Meiryo","Noto Sans JP",sans-serif}
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -37,6 +40,10 @@
   .card .nm{display:inline;font-size:1.8cqw;font-weight:700}
   .card .ht{display:block;font-size:1.25cqw;opacity:.7}
   .card .st{display:block;font-size:1.5cqw;color:#9a6b00;letter-spacing:.1em}
+  #bMute{position:absolute;top:2.2cqw;left:50%;transform:translateX(-50%);pointer-events:auto;border:0;border-radius:2cqw;padding:.5cqw 1.4cqw;font-size:1.8cqw;font-weight:700;background:rgba(251,244,226,.88);color:var(--ink);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
+  #tagStage{max-width:34cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .help{font-size:1.9cqw;line-height:1.85;text-align:left;background:#fff;border-radius:2cqw;padding:2cqw 3cqw;box-shadow:0 .5cqw 0 #cfc3a8;max-width:84cqw}
+  .help b{color:#c4482e}
   .card.lock{opacity:.45;box-shadow:none;cursor:default}
   .card.done{background:#fff7da}
   #prompt{position:absolute;left:50%;top:13cqh;transform:translateX(-50%);font-size:2.4cqw;font-weight:800;letter-spacing:.1em;
@@ -92,6 +99,7 @@
   <div id="hud">
     <div class="tag" id="tagStage">おためしの紙</div>
     <div class="tag" id="tagShard">◆ 0/3</div>
+    <button id="bMute">♪</button>
     <div class="tag" id="tagTime">0.0 s</div>
     <div id="prompt"></div>
     <div id="toast"></div>
@@ -104,7 +112,7 @@
   <div class="screen on" id="scTitle">
     <h1>折りたたまれた世界</h1>
     <p>紙の世界を折って、道を作ろう。<br>折り目（点線）の近くで「折る」と、紙がパタンと反対側にかさなる。</p>
-    <div class="row"><button class="btn" id="btnStart">はじめる</button></div>
+    <div class="row"><button class="btn" id="btnStart">はじめる</button><button class="btn sub" id="btnHelp1">あそびかた</button></div>
     <small><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> / <kbd>W</kbd> / <kbd>↑</kbd> ジャンプ　<kbd>F</kbd> / <kbd>J</kbd> 折る・戻す　<kbd>U</kbd> / <kbd>Shift</kbd> 戻す　<kbd>R</kbd> やり直し　<kbd>Esc</kbd> ポーズ<br>（仮題・Phase 1：折りの面白さ確認）</small>
   </div>
   <div class="screen" id="scSelect">
@@ -118,9 +126,22 @@
     <small>遊んでくれて ありがとう。<br>小さな欠片を 20 個集めると、ひみつの紙が開く。</small>
     <div class="row"><button class="btn" id="btnEndSel">ステージ選択へ</button></div>
   </div>
+  <div class="screen" id="scHelp">
+    <h2>あそびかた</h2>
+    <div class="help">
+      <b>目的</b>：旗（ゴール）まで進む。落ちる・トゲに触れると、最後の旗（チェックポイント）から再開。<br>
+      <b>折る</b>：点線の近くで <kbd>F</kbd>。黄色い「耳」の紙が、折り目を軸に反対側へパタンと重なる。<br>
+      <b>戻す</b>：もう一度 <kbd>F</kbd>（二重折りの面では <kbd>U</kbd> / <kbd>Shift</kbd>）。耳の上に乗って戻すと、耳ごと元の位置へ運ばれる。<br>
+      <b>裏面</b>：折ると、紙の裏にだけある足場や欠片が現れる。<br>
+      <b>折れないとき</b>：紙が重なる位置や、乗っている耳は折れない。耳が震えて知らせる。<br>
+      <b>小さな欠片</b>：各ステージ 3 個。集めなくてもクリアできる。20 個で「ひみつの紙」が開く。<br>
+      <b>困ったら</b>：ポーズ（<kbd>Esc</kbd>）の「ヒント」で、次に使う折り目が光る。
+    </div>
+    <div class="row"><button class="btn" id="btnHelpBack">もどる</button></div>
+  </div>
   <div class="screen" id="scPause">
     <h2>ポーズ</h2>
-    <div class="row"><button class="btn" id="btnResume">つづける</button><button class="btn sub" id="btnRetry">やり直す</button><button class="btn sub" id="btnToSelect1">ステージ選択</button></div>
+    <div class="row"><button class="btn" id="btnResume">つづける</button><button class="btn sub" id="btnRetry">やり直す</button><button class="btn sub" id="btnHint">ヒント</button><button class="btn sub" id="btnHelp2">あそびかた</button><button class="btn sub" id="btnToSelect1">ステージ選択</button></div>
   </div>
   <div class="screen" id="scClear">
     <h2>クリア！</h2>

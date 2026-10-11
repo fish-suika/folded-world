@@ -38,7 +38,7 @@ function resetRun() {
   hero = newHero(level);
   got = world.shards.map(() => false);
   flagsHit = world.flags.map(() => false);
-  cp = null; time = 0; foldCount = 0; deaths = 0;
+  cp = null; time = 0; foldCount = 0; deaths = 0; hintFold = -1; hintedDeaths = false;
   GAME3D.snapCamera(hero.x, hero.y);
 }
 function loadStage(i) {
@@ -49,10 +49,19 @@ function loadStage(i) {
   document.body.classList.toggle('double', world.maxFolds > 1);
 }
 function enterPlay() { state = 'play'; HUD.show(null); HUD.playing(true); }
-function startStage(i) { loadStage(i); enterPlay(); }
+function startStage(i) { loadStage(i); enterPlay(); SND.bgm(level.theme === 'gold' ? 'gold' : level.theme); }
+
+// あそびかた（はじめて遊ぶときは、ステージの前に見せる）
+let helpFrom = 'scTitle', pendingStage = -1, hintFold = -1, hintT = 0, hintedDeaths = false;
+function showHelp(from) { helpFrom = from; HUD.show('scHelp'); }
+function openStage(i) {
+  if (!save.seenHelp) { save.seenHelp = true; writeSave(save); pendingStage = i; showHelp('scSelect'); }
+  else startStage(i);
+}
 
 function respawn() {   // 落ちる・トゲ → 最後に取った旗から。折りも旗を取った時点に戻す
-  deaths++;
+  deaths++; SND.play('death');
+  if (deaths >= 3 && !hintedDeaths) { hintedDeaths = true; setTimeout(() => HUD.toast('ポーズ（Esc）の「ヒント」で、次の折り目が光るよ'), 1700); }
   world.mask = cp ? cp.mask : 0;
   foldStack = cp ? cp.stack.slice() : [];
   anim = null; shake = null;
@@ -90,7 +99,7 @@ function showSelect() {
       let info = sv && sv.clear ? 'クリア　' + sv.best.toFixed(1) + ' 秒' : '未クリア';
       if (!ok) info = lv.needShards ? `小さな欠片 ${lv.needShards} 個で開く（いま ${totalShards()}）` : '前のワールドをクリアで開く';
       b.innerHTML = `<b>${lv.id}</b><span class="nm">${ok ? lv.name : '？？？'}</span><span class="st">${stars}</span><span class="ht">${info}</span>`;
-      if (ok) b.addEventListener('click', () => { if (INPUT.touch) tryLandscape(); startStage(i); });
+      if (ok) b.addEventListener('click', () => { SND.play('click'); if (INPUT.touch) tryLandscape(); openStage(i); });
       row.appendChild(b);
     });
     box.appendChild(row);
@@ -98,7 +107,25 @@ function showSelect() {
   HUD.show('scSelect');
 }
 
-$('btnStart').addEventListener('click', () => { if (INPUT.touch) tryLandscape(); showSelect(); });
+$('btnStart').addEventListener('click', () => { SND.play('click'); if (INPUT.touch) tryLandscape(); showSelect(); });
+$('btnHelp1').addEventListener('click', () => showHelp('scTitle'));
+$('btnHelp2').addEventListener('click', () => showHelp('scPause'));
+$('btnHelpBack').addEventListener('click', () => {
+  if (pendingStage >= 0) { const i = pendingStage; pendingStage = -1; startStage(i); }
+  else HUD.show(helpFrom);
+});
+$('btnHint').addEventListener('click', () => {
+  const r = solve(world, level, { start: { cx: Math.floor(hero.x), y: Math.round(hero.y), mask: world.mask } });
+  const n = r.solvable ? r.nodes.find(k => k.kind === 'fold' || k.kind === 'unfold') : null;
+  pause(false);
+  if (n) { hintFold = n.i; hintT = 6; HUD.toast(n.kind === 'fold' ? 'ヒント：光っている折り目を折ってみよう' : 'ヒント：光っている折り目を戻してみよう'); }
+  else if (r.solvable) HUD.toast('ヒント：折らずに、そのまま進めるよ');
+  else HUD.toast('ここからは進めないかも。R でやり直そう');
+});
+const muteLabel = () => { $('bMute').textContent = SND.muted ? '♪ OFF' : '♪ ON'; };
+onMute = () => { SND.toggleMute(); muteLabel(); };
+$('bMute').addEventListener('click', () => onMute());
+muteLabel();
 $('btnResume').addEventListener('click', () => pause(false));
 $('btnRetry').addEventListener('click', () => onRetry());
 $('btnToSelect1').addEventListener('click', showSelect);
@@ -116,11 +143,11 @@ const WHY = {
   compat: 'その折りとは同時に折れない', onLayer: '乗っている紙は戻せない', max: 'これ以上は同時に折れない',
 };
 
-function startFold(i) { anim = { i, fold: true, t: 0, carried: false, x0: hero.x, x1: hero.x }; foldCount++; }
+function startFold(i) { SND.play('fold'); anim = { i, fold: true, t: 0, carried: false, x0: hero.x, x1: hero.x }; foldCount++; }
 function startUnfold(i) {
   const r = canUnfold(world, i, hero.x, hero.y);
-  if (r.ok) { anim = { i, fold: false, t: 0, carried: r.carried, x0: hero.x, x1: r.nx }; return true; }
-  shake = { i, t: 0 }; HUD.toast(WHY[r.why] || '紙が重なって戻せない');
+  if (r.ok) { SND.play('unfold'); anim = { i, fold: false, t: 0, carried: r.carried, x0: hero.x, x1: r.nx }; return true; }
+  SND.play('shake'); shake = { i, t: 0 }; HUD.toast(WHY[r.why] || '紙が重なって戻せない');
   return false;
 }
 
@@ -164,20 +191,22 @@ function collectItems() {
     if (got[i]) return;
     const c = world.itemCell(s);
     if (!c) return;
-    if (Math.hypot(c[0] + 0.5 - cx, c[1] + 0.5 - cy) < CFG.item.shardR) { got[i] = true; HUD.toast('小さな欠片をひろった！'); }
+    if (Math.hypot(c[0] + 0.5 - cx, c[1] + 0.5 - cy) < CFG.item.shardR) { got[i] = true; HUD.toast('小さな欠片をひろった！'); SND.play('shard'); GAME3D.confetti(c[0] + 0.5, c[1] + 0.5, 12, 5); }
   });
   world.flags.forEach((f, i) => {
     if (flagsHit[i] || !hero.ground || anim) return;
     if (Math.hypot(f.x - hero.x, f.y + 0.5 - cy) < CFG.item.flagR) {
       flagsHit[i] = true;
       cp = { x: f.x, y: f.y, mask: world.mask, stack: foldStack.slice() };
-      HUD.toast('チェックポイント');
+      HUD.toast('チェックポイント'); SND.play('flag'); GAME3D.confetti(f.x, f.y + 1.2, 10, 5);
     }
   });
 }
 
 function clearStage() {
   state = 'clear'; HUD.playing(false);
+  SND.play(level.big ? 'big' : 'clear');
+  GAME3D.confetti(level.goal.x, level.goal.y + 2, level.big ? 150 : 80, level.big ? 10 : 8);
   const n = got.filter(Boolean).length;
   const old = save.stages[level.id] || { clear: false, best: 1e9, shards: level.shards.map(() => false) };
   save.stages[level.id] = {
@@ -213,7 +242,8 @@ function update(dt) {
     else if (INPUT.foldPressed) tryFold();
     if (!anim) {
       stepHero(world, hero, INPUT, dt);
-      if (hero.landed) squash = Math.max(squash, hero.landed);
+      if (hero.jumped) SND.play('jump');
+      if (hero.landed) { squash = Math.max(squash, hero.landed); SND.play('land'); }
       if (hero.y < CFG.hero.deathY || hitsSpike(world, hero)) respawn();
       else {
         collectItems();
@@ -239,6 +269,14 @@ function update(dt) {
   HUD.shards(got.filter(Boolean).length, got.length);
 }
 
+// 足元の地面の高さ（影を落とす位置）
+function groundBelow() {
+  if (state === 'title' || state === 'select') return null;
+  const cx = Math.floor(hero.x);
+  for (let cy = Math.min(world.H - 1, Math.floor(hero.y + 0.01)); cy >= 0; cy--) if (world.solid(cx, cy)) return cy + 1;
+  return null;
+}
+
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
@@ -247,7 +285,8 @@ function frame(now) {
     let rest = dt;                       // 物理は 1/120 秒刻み
     while (rest > 1e-6) { const s = Math.min(rest, 1 / 120); update(s); rest -= s; if (state !== 'play') break; }
   }
-  GAME3D.update(dt, { hero, world, anim, shake, candidate, time: clock, squash, got, flagsHit, dead: false });
+  if (hintT > 0) { hintT -= dt; if (hintT <= 0) hintFold = -1; }
+  GAME3D.update(dt, { hero, world, anim, shake, candidate, time: clock, squash, got, flagsHit, dead: false, hint: hintFold, groundY: groundBelow() });
   GAME3D.render();
   requestAnimationFrame(frame);
 }

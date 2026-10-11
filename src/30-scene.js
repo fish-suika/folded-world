@@ -4,6 +4,7 @@ const GAME3D = (function () {
   let heroRoot, heroBody, heroTail;
   let foldGroups = [], markers = [], backMeshes = [], shardMeshes = [], spikeMeshes = [], flagMeshes = [], flag, flagGlow;
   let camX = 0, camY = 6, bigShard = null;
+  let clouds = [], confRoot, conf = [], blob, hintGlow = null;
   const D = 0.5;            // 紙の厚み（奥行き）
 
   // ---- 紙のテクスチャ（繊維とざらつきを canvas で生成） ----
@@ -201,6 +202,7 @@ const GAME3D = (function () {
       const c = new THREE.Mesh(new THREE.CircleGeometry(r, 20), mt); c.position.set(dx, dy, 0); g.add(c);
     });
     g.position.set(x, y, z); g.scale.setScalar(sc); bgRoot.add(g);
+    clouds.push({ g, v: 0.25 + (sc % 1) * 0.6 });
   }
   function tree(x, z, sc, col) {
     const g = new THREE.Group();
@@ -214,6 +216,24 @@ const GAME3D = (function () {
     }
     g.position.set(x, 2, z); g.scale.setScalar(sc); bgRoot.add(g);
   }
+  // 山の切り絵：ぎざぎざの稜線と、折り目のような明るい面
+  function peaks(color, facet, z) {
+    const s = new THREE.Shape(), f = new THREE.Shape();
+    const pts = [];
+    for (let x = -40, i = 0; x <= 150; x += 9, i++) pts.push([x, 3 + 5.5 + ((i * 37) % 7) * 0.9]);
+    s.moveTo(-40, -30);
+    pts.forEach((p, i) => { s.lineTo(p[0], p[1]); s.lineTo(p[0] + 4.5, 3 + (i % 2) * 1.2); });
+    s.lineTo(150, -30); s.closePath();
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshLambertMaterial({ color, map: TEX.b }));
+    m.position.z = z; bgRoot.add(m);
+    pts.forEach((p, i) => {   // 稜線の片側だけ明るい面（折り目の見え方）
+      const t = new THREE.Shape();
+      t.moveTo(p[0], p[1]); t.lineTo(p[0] + 4.5, 3 + (i % 2) * 1.2); t.lineTo(p[0] + 2.2, 2.4); t.closePath();
+      const fm = new THREE.Mesh(new THREE.ShapeGeometry(t), new THREE.MeshLambertMaterial({ color: new THREE.Color(facet).lerp(new THREE.Color(0xffffff), 0.35).getHex(), map: TEX.a }));
+      fm.position.z = z + 0.05; bgRoot.add(fm);
+    });
+  }
+
   const THEMES = {
     meadow: { sky: 'linear-gradient(#bfe6ff 0%,#e9f6ff 55%,#fff3d6 100%)', ground: 0x93d38c, groundBack: 0x6fae7a, cap: 0x5fb86a, wall: 0x8ec5ee, wallBack: 0x6a9fcf,
               hills: [0xcfe9d4, 0xb5dcb8, 0x9ccf9e], trees: [0x5aa96a, 0x7bc27f], hemi: [0xffffff, 0xb8d8b0, 0.78], sun: 0xfff0d0 },
@@ -232,6 +252,8 @@ const GAME3D = (function () {
     sun.color.setHex(t.sun);
     container.parentElement.style.background = t.sky;
     while (bgRoot.children.length) bgRoot.remove(bgRoot.children[0]);
+    clouds = [];
+    peaks(new THREE.Color(t.hills[0]).lerp(new THREE.Color(0xffffff), 0.12).getHex(), t.hills[0], -32);
     hill(t.hills[0], -26, 4.5, 3.2, 0.11, 0.5, -40, 150);
     hill(t.hills[1], -18, 3.2, 2.6, 0.16, 2.0, -40, 150);
     hill(t.hills[2], -11, 2.4, 1.8, 0.22, 4.2, -40, 150);
@@ -298,6 +320,16 @@ const GAME3D = (function () {
     buildHero();
     levelRoot = new THREE.Group();
     scene.add(levelRoot);
+    confRoot = new THREE.Group(); scene.add(confRoot);
+    const cols = [0xff5d7a, 0xffd23a, 0x5fd0ff, 0x7be08a, 0xffa13a, 0xc58bff];
+    const cmats = cols.map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+    const cgeo = new THREE.PlaneGeometry(0.2, 0.3);
+    for (let i = 0; i < 160; i++) {
+      const m = new THREE.Mesh(cgeo, cmats[i % cmats.length]); m.visible = false; confRoot.add(m);
+      conf.push({ m, life: 0, vx: 0, vy: 0, vz: 0, rx: 0, ry: 0 });
+    }
+    blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ color: 0x1a1030, transparent: true, opacity: 0.28, depthWrite: false }));
+    blob.scale.set(1.1, 0.28, 1); blob.visible = false; scene.add(blob);
     resize();
     window.addEventListener('resize', resize);
   }
@@ -336,7 +368,8 @@ const GAME3D = (function () {
       // 折り目の点線：候補は金色に脈打つ
       const mk = markers[i].userData.mat;
       const hot = st.candidate === i || world.isOn(i);
-      mk.color.setHex(hot ? (Math.sin(st.time * 8) > 0 ? 0xffa800 : 0xff6a00) : 0x8a7a66);
+      if (st.hint === i) mk.color.setHex(Math.sin(st.time * 10) > 0 ? 0x2fd0ff : 0xffffff);
+      else mk.color.setHex(hot ? (Math.sin(st.time * 8) > 0 ? 0xffa800 : 0xff6a00) : 0x8a7a66);
       // 裏面の足場は、半分以上めくれてから現れる（紙の裏側が見えるのと同じ）
       const showBack = p > 0.5;
       for (const m of backMeshes[i]) m.visible = showBack;
@@ -380,6 +413,21 @@ const GAME3D = (function () {
     flag.userData.cloth.rotation.y = Math.sin(st.time * 3) * 0.25;
     if (bigShard) { bigShard.rotation.y = st.time * 1.6; bigShard.position.y = 4.0 + Math.sin(st.time * 2) * 0.2; }
     flagGlow.scale.setScalar(1 + Math.sin(st.time * 3) * 0.08);
+    // ふわふわ動く雲・紙吹雪・足元の影
+    for (const c of clouds) { c.g.position.x += c.v * dt; if (c.g.position.x > 150) c.g.position.x = -45; }
+    for (const p of conf) {
+      if (p.life <= 0) continue;
+      p.life -= dt; p.vy -= 14 * dt; p.vx *= (1 - 1.2 * dt);
+      p.m.position.x += p.vx * dt; p.m.position.y += p.vy * dt; p.m.position.z += p.vz * dt;
+      p.m.rotation.x += p.rx * dt; p.m.rotation.y += p.ry * dt;
+      if (p.life <= 0) p.m.visible = false;
+      else p.m.scale.setScalar(Math.min(1, p.life * 2));
+    }
+    if (st.groundY !== null && st.groundY !== undefined) {
+      blob.visible = true; blob.position.set(hx, st.groundY + 0.03, 0.3);
+      const hgt = Math.max(0, hy - st.groundY);
+      blob.scale.set(1.2 - Math.min(0.6, hgt * 0.1), 0.34 - Math.min(0.2, hgt * 0.03), 1);
+    } else blob.visible = false;
     // カメラ
     const half = world.W / 2;
     const tx = Math.min(world.W - 11, Math.max(11, hx + hero.face * 2.2));
@@ -391,7 +439,22 @@ const GAME3D = (function () {
     sun.position.set(camX - 8, 18, 16); sun.target.position.set(camX, 3, 0); sun.target.updateMatrixWorld();
   }
 
+  // 紙吹雪：(x, y) から n 枚
+  function confetti(x, y, n, power) {
+    let k = 0;
+    for (const p of conf) {
+      if (k >= n) break;
+      if (p.life > 0) continue;
+      p.life = 1.0 + Math.random() * 0.9;
+      p.m.visible = true; p.m.position.set(x, y, 0.4 + Math.random() * 0.6);
+      const a = Math.random() * Math.PI * 2, s = (0.4 + Math.random()) * (power || 7);
+      p.vx = Math.cos(a) * s; p.vy = Math.abs(Math.sin(a)) * s + 3; p.vz = (Math.random() - 0.5) * 2;
+      p.rx = (Math.random() - 0.5) * 14; p.ry = (Math.random() - 0.5) * 14;
+      p.m.rotation.set(Math.random() * 3, Math.random() * 3, 0); p.m.scale.setScalar(1);
+      k++;
+    }
+  }
   function snapCamera(x, y) { camX = Math.min(Math.max(x, 11), 1000); camY = Math.max(CFG.cam.minY, y + 2.6); }
   function render() { renderer.render(scene, camera); }
-  return { init, load, update, render, resize, snapCamera };
+  return { init, load, update, render, resize, snapCamera, confetti };
 })();

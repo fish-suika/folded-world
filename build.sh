@@ -7,6 +7,7 @@ cat src/00-head.html \
     src/10-config.js \
     src/20-logic.js \
     src/30-scene.js \
+    src/50-sound.js \
     src/60-hud.js \
     src/90-boot.js \
     src/99-tail.html > folded-world.html

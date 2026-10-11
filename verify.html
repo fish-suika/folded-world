@@ -497,9 +497,10 @@ function solve(w, level, opts = {}) {
   const gx = level.goal.x, gy = level.goal.y;
   const goalFn = opts.goalFn || ((m, cx, y) => Math.abs(cx + 0.5 - gx) <= 1.0 && Math.abs(y - gy) <= 1);
   const key = (m, cx, y) => ((m * 200) + cx) * 100 + y;
-  const sx = Math.floor(level.start.x), sy = level.start.y;
-  const prev = new Map(), q = [[0, sx, sy]];
-  prev.set(key(0, sx, sy), { from: null, node: { m: 0, cx: sx, y: sy, kind: 'start' } });
+  const st = opts.start || { cx: Math.floor(level.start.x), y: level.start.y, mask: 0 };   // ヒント用：今の位置から探す
+  const sx = st.cx, sy = st.y, sm = st.mask;
+  const prev = new Map(), q = [[sm, sx, sy]];
+  prev.set(key(sm, sx, sy), { from: null, node: { m: sm, cx: sx, y: sy, kind: 'start' } });
   const save = w.mask;
   let found = null;
   const push = (from, m, cx, y, kind, i) => {

@@ -5,7 +5,8 @@ const KEYMAP = {
   ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   ArrowUp: 'jump', KeyW: 'jump', Space: 'jump', KeyF: 'fold', KeyJ: 'fold', KeyU: 'unfold', ShiftLeft: 'unfold', ShiftRight: 'unfold',
 };
-let onPause = () => {}, onRetry = () => {};
+let onPause = () => {}, onRetry = () => {}, onMute = () => {};
+addEventListener('pointerdown', () => SND.unlock(), { passive: true });
 
 function setKey(code, down) {
   const a = KEYMAP[code];
@@ -17,6 +18,8 @@ function setKey(code, down) {
   return true;
 }
 addEventListener('keydown', e => {
+  SND.unlock();
+  if (e.code === 'KeyM' && !e.repeat) { onMute(); return; }
   if (e.repeat) { if (KEYMAP[e.code]) e.preventDefault(); return; }
   if (e.code === 'Escape') { onPause(); return; }
   if (e.code === 'KeyR') { onRetry(); return; }
@@ -57,7 +60,7 @@ function tryLandscape() {
 
 const HUD = {
   show(name) {
-    ['scTitle', 'scSelect', 'scPause', 'scClear', 'scEnding'].forEach(id => $(id).classList.toggle('on', id === name));
+    ['scTitle', 'scSelect', 'scPause', 'scClear', 'scEnding', 'scHelp'].forEach(id => $(id).classList.toggle('on', id === name));
   },
   playing(on) { document.body.classList.toggle('playing', on); },
   stage(txt) { $('tagStage').textContent = txt; },
