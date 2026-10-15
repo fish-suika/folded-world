@@ -47,6 +47,7 @@
   .card .nm{display:inline;font-size:1.8cqw;font-weight:700}
   .card .ht{display:block;font-size:1.15cqw;opacity:.7}
   .card .st{display:block;font-size:1.5cqw;color:#9a6b00;letter-spacing:.1em}
+  #bPause{position:absolute;top:2.2cqw;left:calc(50% + 9cqw);pointer-events:auto;border:0;border-radius:2cqw;padding:.5cqw 1.4cqw;font-size:1.8cqw;font-weight:700;background:rgba(251,244,226,.88);color:var(--ink);box-shadow:0 .3cqw 0 rgba(74,59,46,.18);white-space:nowrap}
   #bMute{position:absolute;top:2.2cqw;left:50%;transform:translateX(-50%);pointer-events:auto;border:0;border-radius:2cqw;padding:.5cqw 1.4cqw;font-size:1.8cqw;font-weight:700;background:rgba(251,244,226,.88);color:var(--ink);box-shadow:0 .3cqw 0 rgba(74,59,46,.18)}
   #tagStage{max-width:34cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .help{font-size:1.9cqw;line-height:1.85;text-align:left;background:#fff;border-radius:2cqw;padding:2cqw 3cqw;box-shadow:0 .5cqw 0 #cfc3a8;max-width:84cqw}
@@ -78,13 +79,24 @@
   /* ---- タッチ操作（スマホ） ---- */
   #touch{position:absolute;inset:0;display:none;pointer-events:none}
   body.touch.playing #touch{display:block}
-  .tb{position:absolute;bottom:4cqh;width:12cqh;height:12cqh;border-radius:50%;border:0;pointer-events:auto;
-    background:rgba(251,244,226,.72);color:var(--ink);font-size:3.4cqh;font-weight:800;box-shadow:0 .8cqh 0 rgba(74,59,46,.25)}
-  .tb.down{background:var(--gold)}
-  #bU{display:none;right:calc(3cqw + 29cqh);font-size:2.6cqh}
+  /* 指で押しやすいように大きく（画面の高さの 22〜26%）。ノッチ・ホームバーを避ける */
+  :root{--sl:max(2cqw,env(safe-area-inset-left,0px));--sr:max(2cqw,env(safe-area-inset-right,0px));--sb:max(3cqh,env(safe-area-inset-bottom,0px))}
+  .tb{position:absolute;bottom:var(--sb);width:23cqh;height:23cqh;border-radius:50%;border:0;pointer-events:auto;
+    background:rgba(251,244,226,.74);color:var(--ink);font-size:6cqh;font-weight:800;box-shadow:0 1cqh 0 rgba(74,59,46,.28)}
+  .tb.down{background:var(--gold);transform:scale(.94)}
+  #bL{left:var(--sl)}#bR{left:calc(var(--sl) + 25.5cqh)}
+  #bJ{right:var(--sr);width:27cqh;height:27cqh;font-size:6.4cqh}
+  #bF{right:calc(var(--sr) + 29.5cqh);font-size:6cqh}
+  #bU{display:none;right:calc(var(--sr) + 29.5cqh);bottom:calc(var(--sb) + 25.5cqh);width:17cqh;height:17cqh;font-size:4.4cqh}
   body.double #bU{display:block}
-  #bL{left:3cqw}#bR{left:calc(3cqw + 14.5cqh)}
-  #bJ{right:3cqw}#bF{right:calc(3cqw + 14.5cqh);font-size:3cqh}
+  #bPause{display:none}
+  body.touch #bPause{display:block}
+  body.touch #bMute,body.touch #bPause{font-size:2.6cqw;padding:.9cqw 2cqw}
+  body.touch #bMute{left:calc(50% - 9cqw)}
+  body.touch #bPause{left:calc(50% + 4cqw)}
+  body.touch .pc-only{display:none}
+  .touch-only{display:none}
+  body.touch .touch-only{display:inline}
   body.canfold #bF{background:var(--gold);animation:pulse .8s ease-in-out infinite}
   @keyframes pulse{50%{transform:scale(1.1)}}
 
@@ -106,7 +118,7 @@
   <div id="hud">
     <div class="tag" id="tagStage">おためしの紙</div>
     <div class="tag" id="tagShard">◆ 0/3</div>
-    <button id="bMute">♪</button>
+    <button id="bMute">♪</button><button id="bPause">⏸ ポーズ</button>
     <div class="tag" id="tagTime">0.0 s</div>
     <div id="prompt"></div>
     <div id="toast"></div>
@@ -135,13 +147,13 @@
     <h2>あそびかた</h2>
     <div class="help">
       <b>目的</b>：旗（ゴール）まで進む。落ちる・トゲに触れると、最後の旗（チェックポイント）から再開。<br>
-      <b>折る</b>：点線の近くで <kbd>F</kbd>。黄色い「耳」の紙が、折り目を軸に反対側へパタンと重なる。<br>
-      <b>戻す</b>：もう一度 <kbd>F</kbd>。次の折り目を折ると、前の折りは自動で戻る。二重折りの面では 2 か所まで同時に折れて、<kbd>U</kbd> / <kbd>Shift</kbd> で戻す。<br>
-      <b>乗って折る</b>：張り出した板の上に乗って <kbd>F</kbd>。板ごとひっくり返って、向こう側へ運ばれる。乗ったまま次の折り目も折れる（二重折り）。<br>
+      <b>折る</b>：点線の近くで <span class="pc-only"><kbd>F</kbd></span><span class="touch-only">「折る」ボタン</span>。黄色い「耳」の紙が、折り目を軸に反対側へパタンと重なる。<br>
+      <b>戻す</b>：もう一度 <span class="pc-only"><kbd>F</kbd></span><span class="touch-only">「折る」ボタン</span>。次の折り目を折ると、前の折りは自動で戻る。二重折りの面では 2 か所まで同時に折れて、<span class="pc-only"><kbd>U</kbd> / <kbd>Shift</kbd></span><span class="touch-only">「戻す」ボタン</span>で戻す。<br>
+      <b>乗って折る</b>：張り出した板の上に乗って <span class="pc-only"><kbd>F</kbd></span><span class="touch-only">「折る」ボタン</span>。板ごとひっくり返って、向こう側へ運ばれる。乗ったまま次の折り目も折れる（二重折り）。<br>
       <b>裏面</b>：折ると、紙の裏にだけある足場や欠片が現れる。<br>
       <b>重なったとき</b>：折る場所に自分がいても大丈夫。紙の上に乗せてくれる。耳の上に乗って折ると、耳ごと運ばれる。<br>
       <b>小さな欠片</b>：各ステージ 3 個。集めなくてもクリアできる。20 個で「ひみつの紙」が開く。<br>
-      <b>困ったら</b>：ポーズ（<kbd>Esc</kbd>）の「ヒント」で、次に使う折り目が光る。
+      <b>困ったら</b>：ポーズ（<span class="pc-only"><kbd>Esc</kbd></span><span class="touch-only">上の「ポーズ」ボタン</span>）の「ヒント」で、次に使う折り目が光る。
     </div>
     <div class="row"><button class="btn" id="btnHelpBack">もどる</button></div>
   </div>

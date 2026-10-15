@@ -43,6 +43,7 @@ bindBtn('bR', () => INPUT.right = true, () => INPUT.right = false);
 bindBtn('bJ', () => { if (!INPUT.jumpHeld) INPUT.jumpPressed = true; INPUT.jumpHeld = true; }, () => INPUT.jumpHeld = false);
 bindBtn('bF', () => INPUT.foldPressed = true);
 bindBtn('bU', () => INPUT.unfoldPressed = true);
+$('bPause').addEventListener('click', () => onPause());
 addEventListener('touchstart', () => { INPUT.touch = true; document.body.classList.add('touch'); }, { passive: true, once: true });
 if (matchMedia('(pointer: coarse)').matches) { INPUT.touch = true; document.body.classList.add('touch'); }
 
@@ -86,6 +87,7 @@ const HUD = {
   prompt(text, warn) {
     const p = $('prompt');
     if (!text) { p.style.display = 'none'; return; }
+    if (INPUT.touch) text = text.replace(/^F：/, '「折る」ボタン：');   // スマホではキーの表示を出さない
     p.style.display = 'block'; p.textContent = text; p.classList.toggle('warn', !!warn);
   },
   canFold(on) { document.body.classList.toggle('canfold', on); },

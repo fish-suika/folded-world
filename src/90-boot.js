@@ -62,7 +62,7 @@ function openStage(i) {
 
 function respawn() {   // 落ちる・トゲ → 最後に取った旗から。折りも旗を取った時点に戻す
   deaths++; SND.play('death');
-  if (deaths >= 3 && !hintedDeaths) { hintedDeaths = true; setTimeout(() => HUD.toast('ポーズ（Esc）の「ヒント」で、次の折り目が光るよ'), 1700); }
+  if (deaths >= 3 && !hintedDeaths) { hintedDeaths = true; setTimeout(() => HUD.toast(INPUT.touch ? 'ポーズの「ヒント」で、次の折り目が光るよ' : 'ポーズ（Esc）の「ヒント」で、次の折り目が光るよ'), 1700); }
   world.mask = cp ? cp.mask : 0;
   foldStack = cp ? cp.stack.slice() : [];
   anims = []; shake = null;
@@ -121,7 +121,7 @@ $('btnHint').addEventListener('click', () => {
   pause(false);
   if (n) { hintFold = n.i; hintT = 6; HUD.toast(n.kind === 'fold' ? 'ヒント：光っている折り目を折ってみよう' : 'ヒント：光っている折り目を戻してみよう'); }
   else if (r.solvable) HUD.toast('ヒント：折らずに、そのまま進めるよ');
-  else HUD.toast('ここからは進めないかも。R でやり直そう');
+  else HUD.toast(INPUT.touch ? 'ここからは進めないかも。ポーズからやり直そう' : 'ここからは進めないかも。R でやり直そう');
 });
 const muteLabel = () => { $('bMute').textContent = SND.muted ? '♪ OFF' : '♪ ON'; };
 onMute = () => { SND.toggleMute(); muteLabel(); };
